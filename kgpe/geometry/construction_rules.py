@@ -118,3 +118,69 @@ class PipeBoreConstructionRule(ConstructionRule):
         )
         return ConstructionRuleOutcome(ConstructionRuleStatus.RULE_APPLIED, self.rule_id, self.rule_version,
                                         value=value, detail="Applied successfully.")
+
+
+class CapLengthSelectionRule(ConstructionRule):
+    """Prompt 13 Sec.16-17: formalizes the H-vs-H1 cap-length selection
+    policy Prompt 11 identified as missing (legacy rules/buttweld.py._cap()
+    always uses standard-wall H unconditionally). Both
+    cap_length_standard_wall_mm and cap_length_heavy_wall_mm/
+    cap_wall_thickness_threshold_mm are already VERIFIED_AUTHORITATIVE
+    (Prompt 7) - only the SELECTION between them was missing.
+
+    Policy: if no actual mating-pipe wall thickness is supplied at all,
+    the standard-wall length is used (matches pre-existing legacy
+    behaviour, applied when the caller made no wall-context request -
+    RULE_NOT_APPLICABLE, not a guess). If an actual wall thickness IS
+    supplied, both cap_length_heavy_wall_mm and
+    cap_wall_thickness_threshold_mm must already be present (the caller
+    must have explicitly requested these optional dimensions per Prompt
+    11's "optional only when explicitly included" rule) - if either is
+    absent, this fails closed (RULE_INPUT_MISSING) rather than guessing a
+    threshold or fabricating a heavy-wall length."""
+    rule_id = "cap_length_selection_standard_vs_heavy_wall"
+    rule_version = "1"
+
+    def apply(self, standard_length_value, standard_length_unit, actual_wall_thickness_mm=None,
+              heavy_wall_length_entry=None, wall_threshold_entry=None):
+        if actual_wall_thickness_mm is None:
+            value = ConstructionValue(
+                name="selected_cap_length_mm", value=float(standard_length_value), unit=standard_length_unit,
+                rule_id=self.rule_id, rule_version=self.rule_version,
+                input_dimension_refs=[{"name": "cap_length_standard_wall_mm", "value": standard_length_value,
+                                        "unit": standard_length_unit}],
+                derivation_trace=["no actual mating-pipe wall thickness supplied - "
+                                   "standard-wall length (H) selected by default policy, not a guess"],
+            )
+            return ConstructionRuleOutcome(ConstructionRuleStatus.RULE_NOT_APPLICABLE, self.rule_id,
+                                            self.rule_version, value=value,
+                                            detail="No wall context supplied - standard-wall length used.")
+
+        if heavy_wall_length_entry is None or wall_threshold_entry is None:
+            return ConstructionRuleOutcome(
+                ConstructionRuleStatus.RULE_INPUT_MISSING, self.rule_id, self.rule_version,
+                detail="Actual wall thickness was supplied but cap_length_heavy_wall_mm/"
+                       "cap_wall_thickness_threshold_mm were not explicitly requested/resolved - "
+                       "cannot make a wall-based selection without both.")
+
+        threshold = float(wall_threshold_entry["value"])
+        if actual_wall_thickness_mm <= threshold:
+            selected_value, selected_name = standard_length_value, "cap_length_standard_wall_mm"
+            selection = "standard_wall (H): actual wall <= published threshold"
+        else:
+            selected_value, selected_name = heavy_wall_length_entry["value"], "cap_length_heavy_wall_mm"
+            selection = "heavy_wall (H1): actual wall > published threshold"
+
+        value = ConstructionValue(
+            name="selected_cap_length_mm", value=float(selected_value), unit=standard_length_unit,
+            rule_id=self.rule_id, rule_version=self.rule_version,
+            input_dimension_refs=[
+                {"name": selected_name, "value": selected_value, "unit": standard_length_unit},
+                {"name": "cap_wall_thickness_threshold_mm", "value": threshold, "unit": standard_length_unit},
+                {"name": "actual_mating_pipe_wall_thickness_mm", "value": actual_wall_thickness_mm,
+                 "unit": "mm"},
+            ],
+            derivation_trace=[f"{selection} (actual_wall={actual_wall_thickness_mm}mm, threshold={threshold}mm)"],
+        )
+        return ConstructionRuleOutcome(ConstructionRuleStatus.RULE_APPLIED, self.rule_id, self.rule_version,
+                                        value=value, detail=selection)

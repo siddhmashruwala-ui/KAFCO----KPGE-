@@ -115,3 +115,64 @@ class FlangeBoreViaPipeScheduleRule(CrossFamilyDependencyRule):
             f"source=pipe({pipe_standard} NPS{target_size} {pipe_schedule})")
         return ConstructionRuleOutcome(ConstructionRuleStatus.RULE_APPLIED, self.rule_id, self.rule_version,
                                         value=cv, detail="Applied via cross-family pipe-schedule reference.")
+
+
+class ButtweldWallViaPipeScheduleRule(CrossFamilyDependencyRule):
+    """Prompt 13 Sec.8: ASME B16.9 publishes no wall_thickness_mm at all
+    for buttweld fittings (confirmed live - only EN_10253 elbow facts
+    carry it). This rule derives a buttweld fitting's wall thickness from
+    an EXPLICITLY supplied mating pipe standard + schedule/wall
+    designation (`kgpe.geometry.wall_context.WallContext`), via the
+    `EngineeringResolver` public interface only - never an implicit
+    NPS/DN/JIS conversion, never a default schedule. Requires the SAME nps
+    size the fitting itself resolved to (the caller-supplied fitting size,
+    passed in explicitly - this rule never infers it from the fitting's
+    OD)."""
+    rule_id = "buttweld_wall_via_pipe_schedule_cross_reference"
+    rule_version = "1"
+
+    def resolve(self, resolver, fitting_standard, fitting_size, wall_context):
+        from ..resolver import EngineeringRequest, ResolutionStatus
+
+        if wall_context is None:
+            return ConstructionRuleOutcome(
+                ConstructionRuleStatus.RULE_INPUT_MISSING, self.rule_id, self.rule_version,
+                detail="No WallContext supplied - wall thickness is never inferred or defaulted.")
+
+        req_kwargs = dict(product_family="pipe", standard=wall_context.pipe_standard,
+                           primary_size=fitting_size, dimensions=["wall_thickness_mm"])
+        if wall_context.pipe_schedule:
+            req_kwargs["schedule"] = wall_context.pipe_schedule
+        else:
+            req_kwargs["wall_designation"] = wall_context.pipe_wall_designation
+        req = EngineeringRequest(**req_kwargs)
+        resolved = resolver.resolve(req)
+
+        if resolved.status == ResolutionStatus.QUARANTINED_ENGINEERING_DATA:
+            return ConstructionRuleOutcome(
+                ConstructionRuleStatus.RULE_BLOCKED_QUARANTINE, self.rule_id, self.rule_version,
+                detail=f"Mating pipe wall_thickness_mm is quarantined: {resolved.quarantine_details}")
+        if resolved.status != ResolutionStatus.RESOLVED:
+            return ConstructionRuleOutcome(
+                ConstructionRuleStatus.RULE_INPUT_MISSING, self.rule_id, self.rule_version,
+                detail=f"Mating pipe ({wall_context.pipe_standard} NPS{fitting_size}) wall_thickness_mm "
+                       f"did not resolve: status={resolved.status}")
+
+        wt_entry = resolved.resolved_dimensions["wall_thickness_mm"]
+        from .construction_value import ConstructionValue
+        cv = ConstructionValue(
+            name="wall_thickness_mm", value=float(wt_entry["value"]), unit=wt_entry["unit"],
+            rule_id=self.rule_id, rule_version=self.rule_version,
+            input_dimension_refs=[{"name": "wall_thickness_mm", "value": wt_entry["value"],
+                                    "unit": wt_entry["unit"], "source_ref": {
+                                        "product_family": "pipe", "standard": wall_context.pipe_standard,
+                                        "nps": fitting_size, "schedule": wall_context.pipe_schedule,
+                                        "wall_designation": wall_context.pipe_wall_designation,
+                                        "source_file": wt_entry.get("source_file")}}],
+            derivation_trace=[
+                f"cross-family: target=buttweld_fitting({fitting_standard} NPS{fitting_size}) <- "
+                f"source=pipe({wall_context.pipe_standard} NPS{fitting_size} "
+                f"{wall_context.pipe_schedule or wall_context.pipe_wall_designation})"],
+        )
+        return ConstructionRuleOutcome(ConstructionRuleStatus.RULE_APPLIED, self.rule_id, self.rule_version,
+                                        value=cv, detail="Applied via cross-family pipe-schedule/wall reference.")

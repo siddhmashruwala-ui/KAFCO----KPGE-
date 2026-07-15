@@ -58,7 +58,7 @@ class PipelineResult:
         }
 
 
-def run_pipeline(request, resolver=None, generation_parameters=None) -> PipelineResult:
+def run_pipeline(request, resolver=None, generation_parameters=None, product_kwargs=None) -> PipelineResult:
     prep = prepare_geometry_specification(request, resolver=resolver)
 
     if not prep.is_ready():
@@ -74,7 +74,7 @@ def run_pipeline(request, resolver=None, generation_parameters=None) -> Pipeline
             failed_stage=prep.failed_stage,
         )
 
-    geometry_result = GeometryKernel().generate(prep.geometry_specification, generation_parameters)
+    geometry_result = GeometryKernel().generate(prep.geometry_specification, generation_parameters, product_kwargs)
     failed_stage = None if geometry_result.is_generated() else PipelineStage.GEOMETRY_GENERATION
 
     return PipelineResult(

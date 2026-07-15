@@ -324,12 +324,25 @@ class TestOrchestration(unittest.TestCase):
                           GeometryReadinessStatus.GEOMETRY_PROFILE_UNAVAILABLE)
 
     def test_dimension_resolution_failure_preserves_both_results(self):
+        # Prompt 13 Sec.20 fix: reducer_concentric no longer requires
+        # outside_diameter_mm at this profile stage (v1->v2 - resolved
+        # per-end at the geometry-kernel layer instead), so this exact
+        # request now succeeds. A flange weld_neck request (ASME_B16.5,
+        # no bore data at all) still demonstrates a genuine
+        # DIMENSION_RESOLUTION-stage failure with both results preserved.
         result = _prep(product_family="buttweld_fitting", subtype="reducer_concentric",
                         standard="ASME_B16.9", large_end_size="6", small_end_size="4")
-        self.assertEqual(result.failed_stage, OrchestrationStage.DIMENSION_RESOLUTION)
+        self.assertIsNone(result.failed_stage)
         self.assertEqual(result.identity_resolution.status, ResolutionStatus.RESOLVED)
         self.assertIsNotNone(result.dimension_resolution)
-        self.assertNotEqual(result.dimension_resolution.status, ResolutionStatus.RESOLVED)
+        self.assertEqual(result.dimension_resolution.status, ResolutionStatus.RESOLVED)
+
+        flange_result = _prep(product_family="flange", subtype="weld_neck", standard="ASME_B16.5",
+                               primary_size="2", pressure_class="150")
+        self.assertEqual(flange_result.failed_stage, OrchestrationStage.DIMENSION_RESOLUTION)
+        self.assertEqual(flange_result.identity_resolution.status, ResolutionStatus.RESOLVED)
+        self.assertIsNotNone(flange_result.dimension_resolution)
+        self.assertNotEqual(flange_result.dimension_resolution.status, ResolutionStatus.RESOLVED)
 
     def test_successful_orchestration_preserves_both_resolutions(self):
         result = _prep(product_family="pipe", standard="ASME_B36.10M", primary_size="6", schedule="Sch40")
@@ -369,10 +382,13 @@ class TestBatchSemantics(unittest.TestCase):
         self.assertTrue(all(it.is_ready() for it in batch.items))
 
     def test_batch_mixed_preserves_order_and_isolates_failure(self):
+        # Prompt 13 Sec.20 fix: reducer_concentric (NPS6x4) is now ready
+        # at this profile stage - flange weld_neck (ASME_B16.5, no bore
+        # data at all) demonstrates the genuine failure case instead.
         batch = prepare_geometry_specifications_batch([
             EngineeringRequest(product_family="pipe", standard="ASME_B36.10M", primary_size="6", schedule="Sch40"),
-            EngineeringRequest(product_family="buttweld_fitting", subtype="reducer_concentric",
-                                standard="ASME_B16.9", large_end_size="6", small_end_size="4"),
+            EngineeringRequest(product_family="flange", subtype="weld_neck", standard="ASME_B16.5",
+                                primary_size="2", pressure_class="150"),
             EngineeringRequest(product_family="buttweld_fitting", subtype="tee_equal",
                                 standard="ASME_B16.9", primary_size="4"),
         ], resolver=_RESOLVER)
@@ -382,8 +398,8 @@ class TestBatchSemantics(unittest.TestCase):
     def test_batch_none_ready(self):
         batch = prepare_geometry_specifications_batch([
             EngineeringRequest(product_family="pipe", standard="ASME_B36.10M"),
-            EngineeringRequest(product_family="buttweld_fitting", subtype="reducer_concentric",
-                                standard="ASME_B16.9", large_end_size="6", small_end_size="4"),
+            EngineeringRequest(product_family="flange", subtype="weld_neck", standard="ASME_B16.5",
+                                primary_size="2", pressure_class="150"),
         ], resolver=_RESOLVER)
         self.assertEqual(batch.batch_status, BatchStatus.NONE_READY)
 
@@ -500,10 +516,15 @@ class TestConstructionRuleRegisterAndCompatibilityMapping(unittest.TestCase):
                 self.assertIn(key, entry)
 
     def test_reducer_gap_is_registered_and_blocking(self):
+        # Prompt 13 Sec.20 resolved this gap (kgpe.geometry.reducer_rules.
+        # ReducerPerEndOutsideDiameterRule + profile.py v1->v2) - the
+        # register entry is retained as historical documentation of the
+        # ORIGINAL Prompt 11 finding, now explicitly marked resolved.
         reducer_entries = [e for e in cov.CONSTRUCTION_RULE_REQUIREMENT_REGISTER
                             if "reducer" in e["subtype"]]
         self.assertTrue(reducer_entries)
-        self.assertTrue(reducer_entries[0]["blocks_geometry_generation_now"])
+        self.assertFalse(reducer_entries[0]["blocks_geometry_generation_now"])
+        self.assertIn("resolved_in", reducer_entries[0])
 
     def test_compatibility_mapping_covers_pipe_flange_buttweld_olet(self):
         paths = {e["existing_geometry_path"].split(" ")[0] for e in cov.EXISTING_GEOMETRY_COMPATIBILITY_MAPPING}
@@ -558,12 +579,16 @@ class TestRepresentativeScenarios(unittest.TestCase):
         self.assertIn("tee_branch_centre_to_end_mm", r.geometry_specification.required_dimensions)
 
     def test_06_asme_b16_9_reducer_profile_assessment(self):
+        # Prompt 13 Sec.20 fix: outside_diameter_mm is no longer REQUIRED
+        # by this profile (v1->v2) - it is resolved independently per-end
+        # by kgpe.geometry.reducer_rules.ReducerPerEndOutsideDiameterRule
+        # at the geometry-kernel layer instead. end_to_end_mm alone is now
+        # sufficient for GEOMETRY_READY at this stage.
         r = _prep(product_family="buttweld_fitting", subtype="reducer_concentric",
                    standard="ASME_B16.9", large_end_size="6", small_end_size="4")
-        self.assertEqual(r.geometry_specification.readiness_status,
-                          GeometryReadinessStatus.UNSUPPORTED_GEOMETRY_REQUEST)
+        self.assertTrue(r.is_ready())
         self.assertIn("end_to_end_mm", r.dimension_resolution.resolved_dimensions)
-        self.assertIn("outside_diameter_mm", r.dimension_resolution.unsupported_reason)
+        self.assertIn("end_to_end_mm", r.geometry_specification.required_dimensions)
 
     def test_07_asme_b16_9_cap_geometry_spec(self):
         r = _prep(product_family="buttweld_fitting", subtype="cap", standard="ASME_B16.9", primary_size="4")

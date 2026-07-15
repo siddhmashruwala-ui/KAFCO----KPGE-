@@ -220,7 +220,12 @@ CONSTRUCTION_RULE_REQUIREMENT_REGISTER = [
                                  "TWICE, once with nps=large_end_size and once with nps=small_end_size "
                                  "(the plain 'nps' shared cross-subtype identity), since large_end_nps/"
                                  "small_end_nps do not scope outside_diameter_mm at all.",
-        "blocks_geometry_generation_now": True,
+        "blocks_geometry_generation_now": False,
+        "resolved_in": "Prompt 13 Sec.20: kgpe.geometry.reducer_rules.ReducerPerEndOutsideDiameterRule "
+                        "performs exactly this two-call per-end resolution at the geometry-kernel layer; "
+                        "kgpe/geometry_spec/profile.py's PROFILE_BUTTWELD_REDUCER was bumped v1->v2 "
+                        "(outside_diameter_mm moved from required to construction_derivable) since "
+                        "requiring it made GEOMETRY_READY structurally unreachable.",
     },
     {
         "product_family": "socketweld_fitting", "subtype": "elbow_90_sw/elbow_45_sw/tee_sw/cross_sw",

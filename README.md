@@ -263,3 +263,68 @@ tests (405 Prompt 4-11 + 90 new) pass; demo unchanged; no geometry-spec/
 resolver/canonical-data-layer file modified; `generator.py`/`rules/*.py`
 untouched; data-layer fingerprint unchanged at
 `9238ab3cb896101c545450df6f0ff070301b4ba68117771b4105e87606c2c873`.
+
+
+## Prompt 13 addendum (Phase 4 - core ASME B16.9 buttweld geometry expansion)
+
+```
+    geometry/ports.py            - ConnectionPort model (position, outward direction,
+                              nominal size role, opening-diameter provenance) + validate_port(s)
+    geometry/wall_context.py       - WallContext (pipe_standard + exactly one of
+                              pipe_schedule/pipe_wall_designation) - additive, carries wall
+                              context to buttweld builders WITHOUT touching frozen models
+    geometry/reducer_rules.py       - ReducerPerEndOutsideDiameterRule: resolves large-end
+                              and small-end OD independently (intra-family, per-role, never
+                              cross-family) - preserves quarantine per end, never swaps ends
+    geometry/transition_rules.py      - TeeBranchBlendingRule, CapProfileConstructionRule,
+                              ConcentricReducerTransitionRule, EccentricReducerOffsetRule -
+                              all versioned, all explicitly construction-derived (never
+                              claimed as standard-authoritative contours)
+    geometry/cross_family.py (+)       - appended ButtweldWallViaPipeScheduleRule (same
+                              pattern as Prompt 12's FlangeBoreViaPipeScheduleRule)
+    geometry/construction_rules.py (+)   - appended CapLengthSelectionRule (H vs H1,
+                              fails closed when wall context ambiguous/missing)
+    geometry/builders.py (+)              - build_arc_swept_hollow_solid, build_solid_cylinder,
+                              build_cap_solid, build_frustum_solid, build_tee_multi_feature
+                              (deterministic multi-feature mesh, NO boolean union - honestly
+                              declared non-manifold at the run/branch intersection)
+    geometry/products/buttweld_elbow.py (rewritten) - generalized across 90LR/45LR/90-3D/
+                              45-3D/90SR via subtype-driven bend-angle/radius lookup (not
+                              copy-pasted); added hollow mode (annular sweep) when wall
+                              context supplied; preserves quarantine blocking on OD
+    geometry/products/tee.py                - equal tee: run + branch as independent solid
+                              cylinders, rigidly placed, 3 ports (run inlet/run outlet/branch)
+    geometry/products/cap.py                 - cap: H/H1 length selection + constructed
+                              dome profile, 1 open-end port
+    geometry/products/reducer.py              - concentric + eccentric reducer: per-end OD
+                              dependency, linear-conical transition, eccentric flat-on-bottom
+                              default orientation (documented, never silently rotated)
+    geometry/result.py (+)                     - TopologyRepresentation vocabulary
+                              (HOLLOW_SWEPT_SOLID / SOLID_EXTERNAL_ENVELOPE /
+                              DETERMINISTIC_MULTI_FEATURE_MESH_NON_MANIFOLD_AT_INTERSECTION)
+                              + GeometryResult.connection_ports
+    geometry/kernel.py (+)                       - product_kwargs param (resolver-dependent
+                              construction values must be resolved by the CALLER, never
+                              by the kernel itself - preserves Prompt 12's architectural rule)
+  tests/test_prompt13_buttweld_geometry.py - 80 tests (wall context, per-end OD rule,
+                              ports, transition rules, elbow generalization/hollow/quarantine,
+                              tee/cap/reducer geometry, dispatch, end-to-end pipelines,
+                              topology honesty, fingerprint/rule-version reproducibility,
+                              Prompt 12 backward compatibility, full regression + demo)
+```
+
+**One frozen-file exception (documented):** `geometry_spec/profile.py`'s
+`PROFILE_BUTTWELD_REDUCER` was bumped v1->v2 - `outside_diameter_mm` removed
+from `required_dimensions` (kept in `construction_derivable_dimensions`),
+because requiring it made `GEOMETRY_READY` structurally unreachable for
+every reducer request. This was a genuine blocking defect in Prompt 11,
+not a redesign. `geometry_spec/coverage.py`'s reducer register entry and
+5 tests in `test_prompt11_geometry_handoff.py` were corrected to match.
+
+**Verified this prompt:** all 40 representative scenarios pass; 575 total
+tests (405 Prompt 4-11 + 90 Prompt 12 + 80 new) pass; demo unchanged;
+no engineering-source/CRM/JS/HTML file, `generator.py`, or `rules/*.py`
+file modified; data-layer fingerprint unchanged at
+`9238ab3cb896101c545450df6f0ff070301b4ba68117771b4105e87606c2c873`.
+Flange, socketweld, olet geometry and the hologram viewer remain
+out of scope - deferred to later prompts per the 20-prompt plan.

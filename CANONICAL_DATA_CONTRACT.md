@@ -1127,3 +1127,95 @@ modifications to `generator.py`, `rules/*.py`, `schema.py`,
 `dimension_library.py`, `kgpe/resolver/*`, `kgpe/geometry_spec/*`, or any
 canonical data-layer file; data-layer fingerprint unchanged at
 `9238ab3cb896101c545450df6f0ff070301b4ba68117771b4105e87606c2c873`.
+
+
+## Prompt 13 addendum (Phase 4 - core ASME B16.9 buttweld geometry expansion)
+
+**Coordinate conventions (Sec.4):** Prompt 12's global convention (+Z axis,
+right-handed, mm units) is preserved unchanged. Per-subtype conventions are
+now explicit: elbow - inlet centreline along +Z at origin, bend plane is
+the X-Z plane, outlet direction determined by subtype bend angle; equal tee
+- run axis along Z centred at origin, branch axis along +Y, branch always
+outward from run centreline; reducer - large end centred at z=0, axis +Z,
+small end at z=length (+ eccentric XY offset for eccentric reducers); cap -
+open-end face at z=0, cap axis +Z, dome/flat profile extends to +z.
+
+**Connection ports (Sec.5-8):** `ConnectionPort` carries port id, position,
+outward direction (normalized), nominal-size role, and opening diameter
+with explicit provenance (`OPENING_DIAMETER_KNOWN` vs.
+`OPENING_DIAMETER_CONSTRUCTION_DERIVED` - never presented as authoritative
+if it isn't). Role identity is preserved per product: elbow inlet/outlet;
+tee run_inlet/run_outlet/branch; reducer large_end/small_end; cap
+open_end. `validate_port(s)` enforces finite position, unit-normalized
+direction, positive opening diameter where declared known.
+
+**Wall/bore policy (Sec.7-9):** Hollow buttweld geometry requires an
+explicit `WallContext` (pipe_standard + exactly one of pipe_schedule /
+pipe_wall_designation) supplied by the caller - never inferred from
+nominal size, never defaulted to Sch40. `ButtweldWallViaPipeScheduleRule`
+(cross-family, same pattern as Prompt 12's `FlangeBoreViaPipeScheduleRule`)
+resolves wall thickness only when this context is present; absent context
+means the elbow is generated as `SOLID_EXTERNAL_ENVELOPE` (external-only,
+honestly declared, never fabricated as hollow).
+
+**Reducer per-end OD dependency (Sec.20-23):** `ReducerPerEndOutsideDiameterRule`
+resolves large-end and small-end OD as two independent per-role queries
+against the SAME buttweld_fitting/ASME_B16.9 identity space (intra-family,
+not `CrossFamilyDependencyRule`). Quarantined NPS8/NPS12 OD conflicts block
+generation whenever they affect either end, tested independently for large
+role and small role. Ends are never swapped, never shared as one value.
+
+**Tee, cap, reducer construction rules (Sec.14-27):** All represented
+honestly rather than as fabricated watertight solids: tee is a
+`DETERMINISTIC_MULTI_FEATURE_MESH_NON_MANIFOLD_AT_INTERSECTION` (two
+independent solid cylinders, rigidly placed, no boolean union -
+`TeeBranchBlendingRule` documents this explicitly and is versioned); cap
+length selection (`CapLengthSelectionRule`, H vs. H1) fails closed when
+wall context is ambiguous or missing, never infers wall from nominal size
+alone; cap dome profile (`CapProfileConstructionRule`) is explicitly
+construction-derived, never claimed as a standard-published contour;
+concentric/eccentric reducers use a linear-conical
+`ConcentricReducerTransitionRule` and `EccentricReducerOffsetRule`
+(flat-on-bottom is the canonical kernel default orientation, documented -
+never silently rotated between runs; orientation is a generation
+parameter, not an engineering-identity field).
+
+**Topology honesty (Sec.31):** every buttweld product self-reports exactly
+one `TopologyRepresentation` value - `HOLLOW_SWEPT_SOLID` (elbow with wall
+context), `SOLID_EXTERNAL_ENVELOPE` (elbow without wall context, cap,
+concentric/eccentric reducer), or
+`DETERMINISTIC_MULTI_FEATURE_MESH_NON_MANIFOLD_AT_INTERSECTION` (tee).
+"Watertight" and "hollow" are never claimed unless actually validated.
+
+**One frozen-file exception (documented):** `geometry_spec/profile.py`'s
+`PROFILE_BUTTWELD_REDUCER` bumped v1->v2 (removed `outside_diameter_mm`
+from `required_dimensions`, retained in `construction_derivable_dimensions`)
+- a genuine blocking defect (made `GEOMETRY_READY` structurally
+unreachable for every reducer), not a redesign. `geometry_spec/coverage.py`'s
+reducer register entry and 5 tests in
+`tests/test_prompt11_geometry_handoff.py` were corrected to match the
+now-correct behavior; all 90 Prompt 11 tests still pass.
+
+**Verified this prompt (40 representative scenarios, Sec.37):** existing
+elbow generation unchanged; hollow elbow with valid wall context; 45LR/
+90-3D/45-3D/90SR elbow generation; elbow dimensional/port validation;
+quarantined NPS8 blocks elbow OD, non-quarantined neighbor unaffected;
+tee generation + run/branch CTE validation + 3-port role validation; cap
+generation + standard/heavy-wall length selection + missing-wall-context
+handled safely; concentric reducer generation + OD/length validation;
+eccentric reducer generation + offset validation + orientation
+determinism; reducer port-role validation; reducer involving quarantined
+NPS8/NPS12 blocked, unaffected pair (6"x3") generates normally; repeated-
+input determinism; construction-rule version participates in
+reproducibility; tessellation-only change alters fingerprint without
+changing engineering identity; end-to-end elbow/tee/cap/concentric/
+eccentric-reducer pipelines; unsupported buttweld subtype remains
+structured unsupported; Prompt 12 pipe pipeline unchanged; demo unchanged.
+
+**Full regression:** 575 total tests (405 Prompt 4-11 + 90 Prompt 12 +
+80 new) pass; `git status` confirms only the expected additive/modified
+geometry files changed (see README Prompt 13 addendum for the full list)
+- zero modifications to `generator.py`, `rules/*.py`, `schema.py`,
+`dimension_library.py`, `kgpe/resolver/*`, or any canonical data-layer
+file; data-layer fingerprint unchanged at
+`9238ab3cb896101c545450df6f0ff070301b4ba68117771b4105e87606c2c873`.

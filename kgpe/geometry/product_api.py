@@ -34,3 +34,7 @@ class ProductGeometryBuild:
     measurements: Dict[str, float] = field(default_factory=dict)
     expected_dimensions: Dict[str, float] = field(default_factory=dict)
     trace: List[str] = field(default_factory=list)
+    # Prompt 13 additions (both optional/backward-compatible - Prompt 12's
+    # pipe/elbow builders may omit them entirely):
+    ports: List[Any] = field(default_factory=list)               # kgpe.geometry.ports.ConnectionPort
+    topology_representation: Optional[str] = None

@@ -180,19 +180,28 @@ PROFILE_BUTTWELD_CAP = GeometryProfile(
 # read(outside_diameter_mm, nps='6') -> EXACT_MATCH).
 # ---------------------------------------------------------------------------
 PROFILE_BUTTWELD_REDUCER = GeometryProfile(
-    profile_id="buttweld_reducer", version="1",
+    profile_id="buttweld_reducer", version="2",
     product_family=VOC.PRODUCT_FAMILY_BUTTWELD_FITTING,
     subtypes=frozenset({VOC.FITTING_TYPE_REDUCER_CONCENTRIC, VOC.FITTING_TYPE_REDUCER_ECCENTRIC}),
-    required_dimensions=frozenset({VOC.DIM_OUTSIDE_DIAMETER, VOC.DIM_END_TO_END}),
+    required_dimensions=frozenset({VOC.DIM_END_TO_END}),
     construction_derivable_dimensions=frozenset({VOC.DIM_OUTSIDE_DIAMETER}),
-    notes="end_to_end_mm resolves cleanly via the reducer role (large_end_nps/small_end_nps). "
-          "outside_diameter_mm does NOT - it is only queryable via the plain 'nps' field (the "
-          "same shared cross-subtype identity elbows/tees/caps use), which the resolver's "
-          "reducer-role base_criteria never populates. A large-end OD and small-end OD each "
-          "require a SEPARATE per-end dimension query (nps=large_end_size, nps=small_end_size) "
-          "that neither kgpe.resolver.engine nor this Phase-3 compiler currently perform - this "
-          "is a genuine missing capability, not fabricated data, registered in the "
-          "construction-rule requirement register (coverage.py) for Prompt 12.",
+    notes="Prompt 13 Sec.20 fix (v1->v2, a genuine blocking defect, not a routine edit): "
+          "end_to_end_mm resolves cleanly via the reducer role (large_end_nps/small_end_nps) and "
+          "remains required here. outside_diameter_mm does NOT resolve via this profile's normal "
+          "per-dimension resolve() path at all - it is only queryable via the plain 'nps' field "
+          "(the same shared cross-subtype identity elbows/tees/caps use), which the resolver's "
+          "reducer-role base_criteria never populates - so listing it as REQUIRED here made "
+          "GEOMETRY_READY structurally unreachable for every reducer request (v1's genuine "
+          "blocking defect). v2 removes it from required_dimensions (matching the existing "
+          "pipe-profile pattern, where bore_diameter_mm is likewise construction_derivable, not "
+          "required) - kgpe.geometry.reducer_rules.ReducerPerEndOutsideDiameterRule now resolves "
+          "large-end and small-end OD independently via TWO separate resolver.resolve() calls "
+          "(nps=large_end_size, nps=small_end_size) at the GEOMETRY layer (Prompt 13), never "
+          "through this compiler's single-dimension-bundle path. This is the only Prompt 11 file "
+          "modification made in Prompt 13, made exactly because it structurally blocked geometry "
+          "generation with no other addable-only fix available (Sec.8's 'smallest additive "
+          "downstream extension' principle, applied here since the profile's OWN required-set "
+          "was the blocker, not a downstream layer).",
 )
 
 # ---------------------------------------------------------------------------

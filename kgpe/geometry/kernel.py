@@ -17,12 +17,24 @@ from .validation import validate_mesh_structure, validate_dimensions
 from .fingerprint import compute_geometry_fingerprint
 from .version import GEOMETRY_KERNEL_VERSION
 from .product_api import GeometryInputError, ConstructionRuleUnavailableError
+from .ports import validate_ports, PortValidationError
 from .products import pipe as pipe_product
 from .products import buttweld_elbow as buttweld_elbow_product
+from .products import tee as tee_product
+from .products import cap as cap_product
+from .products import reducer as reducer_product
 
+# Prompt 13 Sec.32: expanded ONLY for successfully implemented and
+# validated product profiles - reducer_concentric/reducer_eccentric BOTH
+# resolve to the single "buttweld_reducer" geometry_profile_id (Prompt 11
+# profile.py); products/reducer.py itself distinguishes them via the
+# engineering identity's subtype field.
 _PRODUCT_DISPATCH = {
     "pipe": pipe_product,
     "buttweld_elbow": buttweld_elbow_product,
+    "buttweld_tee_equal": tee_product,
+    "buttweld_cap": cap_product,
+    "buttweld_reducer": reducer_product,
 }
 
 
@@ -37,7 +49,15 @@ def _base_result(status, geometry_spec, trace, **kwargs):
 
 
 class GeometryKernel:
-    def generate(self, geometry_specification, generation_parameters=None) -> GeometryResult:
+    def generate(self, geometry_specification, generation_parameters=None, product_kwargs=None) -> GeometryResult:
+        """Prompt 13 Sec.8: `product_kwargs` is an optional dict of
+        ALREADY-RESOLVED extra inputs a specific product builder needs
+        beyond `(geometry_spec, generation_parameters)` - e.g. elbow's
+        `wall_thickness_value`, cap's `actual_wall_thickness_value`,
+        reducer's `large_od_value`/`small_od_value`/`eccentric`/
+        `orientation`. Every value in it MUST already be resolved (a
+        `ConstructionValue`, a plain flag, etc.) - the kernel never
+        resolves anything itself."""
         trace = []
         try:
             params = generation_parameters or GenerationParameters()
@@ -58,7 +78,7 @@ class GeometryKernel:
             return _base_result(GeometryGenerationStatus.UNSUPPORTED_GEOMETRY_PROFILE, geometry_specification, trace)
 
         try:
-            build_result = product_module.build(geometry_specification, params)
+            build_result = product_module.build(geometry_specification, params, **(product_kwargs or {}))
         except GeometryInputError as e:
             trace.append(str(e))
             return _base_result(GeometryGenerationStatus.INVALID_ENGINEERING_DIMENSIONS, geometry_specification,
@@ -82,6 +102,17 @@ class GeometryKernel:
                                               features=build_result.features)
         dimensional = validate_dimensions(build_result.measurements, build_result.expected_dimensions)
 
+        # Prompt 13 Sec.6: validate any connection ports the product
+        # builder exposed - a genuinely malformed port is a programmer
+        # defect (never an expected engineering outcome), so it is
+        # reported the same way an unexpected exception is (Sec.5).
+        try:
+            validate_ports(build_result.ports)
+        except PortValidationError as e:
+            trace.append(f"port validation failed: {e}")
+            return _base_result(GeometryGenerationStatus.GEOMETRY_GENERATION_FAILED, geometry_specification,
+                                 trace, warnings=[str(e)])
+
         if not structural.passed or not dimensional.passed:
             trace.append("geometry validation failed - see dimensional/geometry validation summaries")
             return _base_result(
@@ -90,6 +121,8 @@ class GeometryKernel:
                 dimensional_validation_summary=dimensional.to_dict(),
                 geometry_validation_summary=structural.to_dict(),
                 construction_rule_versions={cv.rule_id: cv.rule_version for cv in build_result.construction_values},
+                topology_representation=build_result.topology_representation,
+                connection_ports=[p.to_dict() for p in build_result.ports],
             )
 
         geometry_fp = compute_geometry_fingerprint(mesh, params, GEOMETRY_KERNEL_VERSION)
@@ -105,6 +138,7 @@ class GeometryKernel:
             "features": build_result.features,
             "construction_values": [cv.to_dict() for cv in build_result.construction_values],
             "measurements": build_result.measurements,
+            "ports": [p.to_dict() for p in build_result.ports],
         }
         trace.append(f"geometry generated successfully: {topology_summary['vertex_count']} vertices, "
                      f"{topology_summary['face_count']} faces")
@@ -118,10 +152,12 @@ class GeometryKernel:
             geometry_validation_summary=structural.to_dict(),
             construction_rule_versions={cv.rule_id: cv.rule_version for cv in build_result.construction_values},
             geometry_payload=geometry_payload,
+            topology_representation=build_result.topology_representation,
+            connection_ports=[p.to_dict() for p in build_result.ports],
         )
 
 
-def generate_geometry(geometry_specification, generation_parameters=None) -> GeometryResult:
+def generate_geometry(geometry_specification, generation_parameters=None, product_kwargs=None) -> GeometryResult:
     """Sec.5: module-level convenience function - equivalent to
-    `GeometryKernel().generate(geometry_specification, generation_parameters)`."""
-    return GeometryKernel().generate(geometry_specification, generation_parameters)
+    `GeometryKernel().generate(geometry_specification, generation_parameters, product_kwargs)`."""
+    return GeometryKernel().generate(geometry_specification, generation_parameters, product_kwargs)

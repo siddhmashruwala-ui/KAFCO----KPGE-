@@ -23,13 +23,27 @@ from .policy import (
     is_effectively_zero, within_tolerance, round_for_fingerprint, degrees_to_radians,
 )
 from .mesh import Mesh
-from .builders import build_hollow_cylinder, build_arc_swept_solid
+from .builders import (
+    build_hollow_cylinder, build_arc_swept_solid, build_arc_swept_hollow_solid,
+    build_solid_cylinder, build_cap_solid, build_frustum_solid, build_tee_multi_feature,
+)
 from .construction_value import ConstructionValue, PROVENANCE_LABEL_DERIVED
 from .construction_rules import (
     ConstructionRuleStatus, ALL_CONSTRUCTION_RULE_STATUSES, ConstructionRuleOutcome,
-    ConstructionRule, PipeBoreConstructionRule,
+    ConstructionRule, PipeBoreConstructionRule, CapLengthSelectionRule,
 )
-from .cross_family import CrossFamilyDependencyRule, FlangeBoreViaPipeScheduleRule
+from .cross_family import CrossFamilyDependencyRule, FlangeBoreViaPipeScheduleRule, ButtweldWallViaPipeScheduleRule
+from .reducer_rules import ReducerPerEndOutsideDiameterRule
+from .wall_context import WallContext, WallContextError
+from .ports import (
+    ConnectionPort, PortValidationError, validate_port, validate_ports,
+    OPENING_DIAMETER_PROVENANCE_AUTHORITATIVE, OPENING_DIAMETER_PROVENANCE_DERIVED,
+    OPENING_DIAMETER_PROVENANCE_NOT_MODELED,
+)
+from .transition_rules import (
+    TeeBranchBlendingRule, CapProfileConstructionRule, ConcentricReducerTransitionRule,
+    EccentricReducerOffsetRule,
+)
 from .tessellation import (
     MIN_RADIAL_SEGMENTS, MIN_SWEEP_SEGMENTS, DEFAULT_RADIAL_SEGMENTS, DEFAULT_SWEEP_SEGMENTS,
     validate_tessellation,
@@ -40,10 +54,18 @@ from .parameters import (
 from .validation import ValidationCheck, ValidationResult, validate_mesh_structure, validate_dimensions
 from .measurement import measure_radial_distance, measure_axial_length, measure_bend_radius
 from .fingerprint import compute_geometry_fingerprint
-from .result import GeometryGenerationStatus, ALL_GEOMETRY_GENERATION_STATUSES, GeometryResult
+from .result import (
+    GeometryGenerationStatus, ALL_GEOMETRY_GENERATION_STATUSES, GeometryResult,
+    TopologyRepresentation, ALL_TOPOLOGY_REPRESENTATIONS,
+)
 from .product_api import GeometryInputError, ConstructionRuleUnavailableError, ProductGeometryBuild
 from .kernel import GeometryKernel, generate_geometry
-from .pipeline import PipelineResult, run_pipeline
+from .pipeline import PipelineStage, PipelineResult, run_pipeline
+from .products import pipe as product_pipe
+from .products import buttweld_elbow as product_buttweld_elbow
+from .products import tee as product_tee
+from .products import cap as product_cap
+from .products import reducer as product_reducer
 
 GEOMETRY_PACKAGE_SCHEMA_VERSION = "geometry-kernel-package-2026.07.15"
 
@@ -52,11 +74,18 @@ __all__ = [
     "LENGTH_UNIT", "COORDINATE_CONVENTION", "LINEAR_TOLERANCE_MM", "NEAR_ZERO_MM", "ANGULAR_TOLERANCE_RAD",
     "DEGENERATE_AREA_THRESHOLD_MM2", "FINGERPRINT_ROUNDING_DECIMALS",
     "is_effectively_zero", "within_tolerance", "round_for_fingerprint", "degrees_to_radians",
-    "Mesh", "build_hollow_cylinder", "build_arc_swept_solid",
+    "Mesh", "build_hollow_cylinder", "build_arc_swept_solid", "build_arc_swept_hollow_solid",
+    "build_solid_cylinder", "build_cap_solid", "build_frustum_solid", "build_tee_multi_feature",
     "ConstructionValue", "PROVENANCE_LABEL_DERIVED",
     "ConstructionRuleStatus", "ALL_CONSTRUCTION_RULE_STATUSES", "ConstructionRuleOutcome",
-    "ConstructionRule", "PipeBoreConstructionRule",
-    "CrossFamilyDependencyRule", "FlangeBoreViaPipeScheduleRule",
+    "ConstructionRule", "PipeBoreConstructionRule", "CapLengthSelectionRule",
+    "CrossFamilyDependencyRule", "FlangeBoreViaPipeScheduleRule", "ButtweldWallViaPipeScheduleRule",
+    "ReducerPerEndOutsideDiameterRule", "WallContext", "WallContextError",
+    "ConnectionPort", "PortValidationError", "validate_port", "validate_ports",
+    "OPENING_DIAMETER_PROVENANCE_AUTHORITATIVE", "OPENING_DIAMETER_PROVENANCE_DERIVED",
+    "OPENING_DIAMETER_PROVENANCE_NOT_MODELED",
+    "TeeBranchBlendingRule", "CapProfileConstructionRule", "ConcentricReducerTransitionRule",
+    "EccentricReducerOffsetRule",
     "MIN_RADIAL_SEGMENTS", "MIN_SWEEP_SEGMENTS", "DEFAULT_RADIAL_SEGMENTS", "DEFAULT_SWEEP_SEGMENTS",
     "validate_tessellation",
     "GenerationParameters", "DEFAULT_PIPE_SEGMENT_LENGTH_MM", "PIPE_SEGMENT_LENGTH_LABEL",
@@ -64,8 +93,10 @@ __all__ = [
     "measure_radial_distance", "measure_axial_length", "measure_bend_radius",
     "compute_geometry_fingerprint",
     "GeometryGenerationStatus", "ALL_GEOMETRY_GENERATION_STATUSES", "GeometryResult",
+    "TopologyRepresentation", "ALL_TOPOLOGY_REPRESENTATIONS",
     "GeometryInputError", "ConstructionRuleUnavailableError", "ProductGeometryBuild",
     "GeometryKernel", "generate_geometry",
-    "PipelineResult", "run_pipeline",
+    "PipelineStage", "PipelineResult", "run_pipeline",
+    "product_pipe", "product_buttweld_elbow", "product_tee", "product_cap", "product_reducer",
     "GEOMETRY_PACKAGE_SCHEMA_VERSION",
 ]
