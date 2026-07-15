@@ -200,3 +200,66 @@ notes, including the real gaps this prompt's live inspection found
 (pipe bore, ASME/EN flange bore, buttweld reducer per-end OD, socket-weld
 body OD, olet manufacturer-only body dims) - all registered, none solved
 here. Prompt 12 begins the parametric geometry kernel.
+
+
+## Prompt 12 addendum (Phase 4 - parametric geometry kernel)
+
+```
+    geometry/                - (Prompt 12, Phase 4) Parametric Geometry Kernel and
+                              Deterministic Construction Rules. Consumes ONLY a compiled
+                              GeometrySpecification (kgpe.geometry_spec) - never a raw
+                              request, never source JSON, never dimension_library.py.
+                              Strictly additive - never touches generator.py/rules/*.py.
+      version.py              - GEOMETRY_KERNEL_VERSION and related schema version constants
+      policy.py                - coordinate convention (+Z axis, right-handed, mm units),
+                                 centralized numerical tolerances
+      primitives.py              - pure-stdlib math primitives (vectors, circle_ring,
+                                 arc_sweep_frames, rotate_about_axis) - no numpy/CAD dependency
+      mesh.py                      - Mesh: deterministic indexed triangle mesh representation
+      builders.py                  - build_hollow_cylinder() (pipe), build_arc_swept_solid()
+                                 (elbow) - feature-tagged (Sec.11) mesh construction
+      construction_value.py         - ConstructionValue (DERIVED_CONSTRUCTION_VALUE provenance)
+      construction_rules.py          - ConstructionRule framework + PipeBoreConstructionRule
+                                 (bore = OD - 2*WT, fully validated, versioned)
+      cross_family.py                 - CrossFamilyDependencyRule framework + one proof-of-
+                                 concept rule (FlangeBoreViaPipeScheduleRule) - not wired
+                                 into kernel dispatch this prompt
+      tessellation.py                  - deterministic segment-count policy/validation
+      parameters.py                     - GenerationParameters (display-only, never engineering
+                                 truth - e.g. DEFAULT_PIPE_SEGMENT_LENGTH_MM)
+      validation.py                      - validate_mesh_structure() / validate_dimensions()
+      measurement.py                      - measure_radial_distance/axial_length/bend_radius -
+                                 measures the ACTUAL generated mesh, never assumed correct
+      fingerprint.py                       - compute_geometry_fingerprint() - SHA-256 over
+                                 rounded vertices/faces + units + convention + kernel version
+                                 + generation parameters (excludes timestamps/object identity)
+      result.py                             - GeometryResult + 7-status GeometryGenerationStatus
+      product_api.py                         - GeometryInputError / ConstructionRuleUnavailableError
+                                 / ProductGeometryBuild (kernel<->product contract)
+      products/pipe.py                        - Reference Product A: hollow cylindrical pipe segment
+      products/buttweld_elbow.py                - Reference Product B: ASME B16.9 90-deg LR elbow
+                                 (arc-sweep primitive proof)
+      kernel.py                                  - GeometryKernel.generate() / generate_geometry() -
+                                 the ONE public entry point; never raises (Sec.5)
+      pipeline.py                                 - run_pipeline(): EngineeringRequest ->
+                                 prepare_geometry_specification() -> GeometryKernel.generate()
+                                 in one call, preserving every stage result/fingerprint
+  tests/test_prompt12_geometry_kernel.py - automated tests for kgpe/geometry/ (90 tests,
+                              covers the 25 representative scenarios)
+```
+
+This completes the Phase 4 kernel foundation:
+`GeometrySpecification -> GeometryKernel.generate() -> GeometryResult`
+
+Reference Product A (pipe) proves the straight-extrusion/hollow-cylinder
+path and the `PipeBoreConstructionRule`; Reference Product B (ASME B16.9
+90-degree long-radius elbow) proves the arc-sweep/revolution path with no
+construction rule needed (`centre_to_end_mm` IS the bend radius by the
+standard's own definition). Both are demonstrated end-to-end across all
+three standard families the canonical data layer covers (ASME, JIS, EN).
+
+**Verified this prompt:** all 25 representative scenarios pass; 495 total
+tests (405 Prompt 4-11 + 90 new) pass; demo unchanged; no geometry-spec/
+resolver/canonical-data-layer file modified; `generator.py`/`rules/*.py`
+untouched; data-layer fingerprint unchanged at
+`9238ab3cb896101c545450df6f0ff070301b4ba68117771b4105e87606c2c873`.

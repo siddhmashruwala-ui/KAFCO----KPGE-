@@ -953,3 +953,177 @@ inspection this prompt, following the exact documentation style Prompt
 geometry generated; `generator.py`/`rules/*.py` untouched; no source
 engineering file or CRM/JS/HTML/KFEE file modified; data-layer fingerprint
 unchanged at `9238ab3cb896101c545450df6f0ff070301b4ba68117771b4105e87606c2c873`.
+
+
+## Prompt 12 addendum (Phase 4 - Parametric Geometry Kernel and Deterministic Construction Rules)
+
+**Internal representation:** a deterministic indexed triangle mesh
+(`kgpe.geometry.mesh.Mesh` - vertices as `(x,y,z)` float tuples, faces as
+`(i,j,k)` index tuples), chosen over a BRep/CAD kernel since it needs no
+new dependency, supports future visualization/export/dimensional
+validation directly, and keeps every existing kgpe module's stdlib-only
+style (confirmed live: numpy is present in this environment but
+scipy/trimesh/open3d are not - numpy was deliberately NOT adopted merely
+because it happened to be available).
+
+**Coordinate/unit/numerical policy** (`kgpe.geometry.policy`, the ONE
+place every other module imports these from): right-handed system,
+primary product axis +Z, origin at the start-face centreline, X/Y span
+the start-face cross-section; all internal lengths in mm (matching
+`kgpe.contract.units.CANONICAL_LENGTH_UNIT`, so no conversion is ever
+needed against the canonical engineering layer); internal angles in
+radians, degrees only at doc/API boundaries; centralized tolerances
+(`LINEAR_TOLERANCE_MM=1e-6`, `NEAR_ZERO_MM=1e-9`,
+`ANGULAR_TOLERANCE_RAD=1e-9`, `DEGENERATE_AREA_THRESHOLD_MM2=1e-9`,
+`FINGERPRINT_ROUNDING_DECIMALS=6`).
+
+**Reference Product A - pipe** (`products/pipe.py`): consumes a
+GEOMETRY_READY `pipe` `GeometrySpecification` (`outside_diameter_mm`,
+`wall_thickness_mm`), derives bore via `PipeBoreConstructionRule`
+(`bore = OD - 2*WT`, fully validated: positive OD/WT, `2*WT < OD`,
+positive bore, mm-only, finite-numeric-only; tagged
+`DERIVED_CONSTRUCTION_VALUE`, never written back to the canonical
+registry), builds a hollow cylindrical solid via
+`build_hollow_cylinder()`. Segment length is a separate, explicitly
+labeled `GenerationParameters.pipe_segment_length_mm`
+(`DEFAULT_PIPE_SEGMENT_LENGTH_MM=300.0`,
+`PIPE_SEGMENT_LENGTH_LABEL="GEOMETRY_DISPLAY_PARAMETER_NOT_AUTHORITATIVE"`)
+- never conflated with engineering truth, never entering the geometry
+fingerprint as an engineering dimension (though it IS reflected in the
+geometry fingerprint, since it changes the actual generated mesh - Sec.19/27).
+
+**Reference Product B - ASME B16.9 90-degree long-radius elbow**
+(`products/buttweld_elbow.py`, geometry profile `buttweld_elbow` from
+Prompt 11): selected over tee/cap/JIS-flange because its required
+dimensions (`outside_diameter_mm`, `centre_to_end_mm`) are already fully
+authoritative with zero cross-family/construction-rule gap (Prompt 11's
+own construction-rule register lists reducer/socketweld/flange-bore as
+blocked, not elbow), and because it exercises the arc-sweep/revolution
+primitive with the highest future reuse value (tee/reducer/other elbow
+angles). Geometric mapping (no construction rule needed): for a 90-degree
+LR elbow, `centre_to_end_mm` IS the bend radius by the standard's own
+definition - consumed directly. No bore is modeled (wall_thickness is not
+part of this profile's required/default-included dimension set -
+documented honestly, not fabricated).
+
+**Arc-sweep primitive** (`primitives.arc_sweep_frames`): closed-form,
+deterministic frames for a circular arc in the XZ plane, pivot implicitly
+at `(bend_radius, 0, 0)`: `center(theta) = (R-R*cos(theta), 0, R*sin(theta))`,
+`tangent(theta) = (sin(theta), 0, cos(theta))`, `v_axis` always global
++Y, `u_axis = tangent x v_axis` - verified analytically (theta=0 enters
++Z, theta=90 degrees leaves +X, pivot-to-center distance is exactly R at
+every theta). Deterministic seam placement is guaranteed throughout
+(`circle_ring()`/`arc_sweep_frames()` always start from the same fixed
+basis vector, never a random angle) per the tessellation policy
+(`MIN_RADIAL_SEGMENTS=8`, `MIN_SWEEP_SEGMENTS=2`,
+`DEFAULT_RADIAL_SEGMENTS=32`, `DEFAULT_SWEEP_SEGMENTS=16`).
+
+**Construction-rule framework** (`construction_rules.py`):
+`ConstructionRule` base + `ConstructionRuleStatus` vocabulary
+(`RULE_APPLIED`/`RULE_NOT_APPLICABLE`/`RULE_INPUT_MISSING`/
+`RULE_BLOCKED_QUARANTINE`/`RULE_UNSUPPORTED`), with exactly one
+implementation this prompt (`PipeBoreConstructionRule`).
+
+**Cross-family dependency framework** (`cross_family.py`): base class
+`CrossFamilyDependencyRule` plus exactly one proof-of-concept rule,
+`FlangeBoreViaPipeScheduleRule` (derives a flange's bore from an
+explicitly-supplied mating pipe standard+schedule, via the resolver's
+public interface only - never an implicit NPS/DN/JIS conversion). This
+rule issues TWO separate `resolver.resolve()` calls (one for
+`outside_diameter_mm` with no schedule, one for `wall_thickness_mm` with
+schedule) rather than one shared-criteria call for both dimensions - a
+real bug was found and fixed here during this prompt's own testing: a
+single combined call reproduces the exact same rating-criteria-mixing
+resolver limitation Prompt 11 documented for `EngineeringResolver`
+(`base_criteria` applies the rating filter to every requested dimension
+uniformly, even a rating-independent one like pipe OD), which made the
+rule's own textbook demonstration case fail until split into two calls -
+mirroring, at the rule level, the same fix pattern Prompt 11 already
+applied at the orchestration level (`_attempt_rating_relaxation`). This
+rule is NOT wired into the kernel's product dispatch (`_PRODUCT_DISPATCH`
+contains only `pipe`/`buttweld_elbow`) - proven standalone via its own
+dedicated tests only, per Sec.16's instruction to build the framework but
+implement/wire only one low-risk proof rule.
+
+**Geometry-generation status vocabulary** (`result.py`):
+`GEOMETRY_GENERATED`/`GEOMETRY_SPEC_NOT_READY`/`UNSUPPORTED_GEOMETRY_PROFILE`/
+`CONSTRUCTION_RULE_UNAVAILABLE`/`INVALID_ENGINEERING_DIMENSIONS`/
+`GEOMETRY_VALIDATION_FAILED`/`GEOMETRY_GENERATION_FAILED`. The kernel's
+public boundary (`GeometryKernel.generate()`/`generate_geometry()`) never
+raises - every outcome, including an unexpected internal exception, is
+converted to a structured `GeometryResult` (verified by a dedicated test
+that monkeypatches a product builder to raise `RuntimeError` and confirms
+`GEOMETRY_GENERATION_FAILED` is returned, not an exception).
+
+**Structural + dimensional validation** (`validation.py`,
+`measurement.py`): `validate_mesh_structure()` checks finite coordinates,
+valid/non-duplicate face indices, no degenerate faces, non-empty
+topology, and expected feature count; `validate_dimensions()` compares
+MEASURED values (via `measure_radial_distance`/`measure_axial_length`/
+`measure_bend_radius`, computed directly off the generated mesh's actual
+vertex data) against the intended engineering dimensions within
+`LINEAR_TOLERANCE_MM` - a result is never assumed correct merely because
+generation didn't raise.
+
+**Geometry fingerprint** (`fingerprint.py`): SHA-256 over
+`json.dumps(payload, sort_keys=True, default=str)` where payload =
+units + coordinate convention + kernel version + generation parameters +
+rounded (6-decimal) vertex coordinates + face index tuples. Excludes
+timestamps and object identity (verified: identical inputs computed 10ms
+apart produce identical fingerprints). Verified sensitive to: kernel
+version, generation parameters (segment length, tessellation), and any
+mesh/vertex mutation - while the geometry-SPECIFICATION fingerprint
+(Prompt 11, engineering-identity-only) stays unchanged when only
+generation parameters change, proving the fingerprint hierarchy correctly
+separates "same engineering object" from "same generated mesh."
+
+**End-to-end pipeline** (`pipeline.py`, `run_pipeline()`):
+`EngineeringRequest -> prepare_geometry_specification() (Prompt 11) ->
+GeometryKernel.generate() (Prompt 12) -> GeometryResult` in one call,
+preserving every stage result and fingerprint simultaneously (engineering
+resolution status, geometry-specification readiness, geometry generation
+status, data-layer fingerprint, geometry-specification fingerprint,
+geometry fingerprint) - an early-stage failure (engineering resolution /
+profile selection / dimension resolution / geometry compilation) is
+never masked as, or attempted to reach, geometry generation
+(`PipelineResult.failed_stage` always names the exact failing stage;
+`PipelineStage.GEOMETRY_GENERATION` extends, never redefines, Prompt 11's
+own `OrchestrationStage` vocabulary).
+
+**Verified this prompt (25 representative scenarios, Sec.35):** ASME/JIS/
+EN pipe generation (all three standard families); pipe bore derivation
+via `PipeBoreConstructionRule`; invalid pipe dimensions
+(`2*WT >= OD`) correctly rejected as `CONSTRUCTION_RULE_UNAVAILABLE`;
+default vs. caller-supplied segment length (fingerprint-sensitive);
+generation-parameter fingerprint sensitivity (tessellation, segment
+length) without engineering-identity (geometry-specification fingerprint)
+change; repeated-request determinism (identical fingerprint across
+independent calls); ASME B16.9 90-degree LR elbow generation +
+dimensional validation + fingerprint; not-ready geometry specification ->
+`GEOMETRY_SPEC_NOT_READY` (generation never attempted); unsupported
+profile (`flange_weld_neck`) -> `UNSUPPORTED_GEOMETRY_PROFILE`; missing
+required dimensions -> `INVALID_ENGINEERING_DIMENSIONS`; invalid
+primitive input (negative radius, zero segments, non-positive sweep
+angle) rejected by `InvalidPrimitiveInputError`; degenerate geometry
+(zero-area triangle) detected by `validate_mesh_structure()`;
+validation-failure structured result path; demo (`examples/demo.py`)
+unchanged/PASS; full end-to-end pipeline via `run_pipeline()`; fingerprint
+preservation (data-layer + geometry-specification + geometry, all three
+simultaneously) end-to-end; dimension-mutation fingerprint sensitivity
+(6" vs 8" pipe -> different geometry-specification AND geometry
+fingerprints); tessellation-only mutation fingerprint sensitivity without
+engineering-identity change; kernel never raises on an unexpected
+internal exception (`GEOMETRY_GENERATION_FAILED`); cross-family
+proof-of-concept rule (`FlangeBoreViaPipeScheduleRule`) applies
+correctly and is confirmed NOT wired into kernel dispatch.
+
+**Full regression:** 495 total tests (405 Prompt 4-11 + 90 new) pass; a
+real bug found and fixed during this prompt's own testing
+(`cross_family.py`'s single combined resolver call for OD+WT, described
+above) - the only code defect discovered this prompt; demo unchanged;
+`git status` confirms only new, additive files
+(`kgpe/geometry/*`, `tests/test_prompt12_geometry_kernel.py`) - zero
+modifications to `generator.py`, `rules/*.py`, `schema.py`,
+`dimension_library.py`, `kgpe/resolver/*`, `kgpe/geometry_spec/*`, or any
+canonical data-layer file; data-layer fingerprint unchanged at
+`9238ab3cb896101c545450df6f0ff070301b4ba68117771b4105e87606c2c873`.
