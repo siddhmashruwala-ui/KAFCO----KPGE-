@@ -250,7 +250,20 @@ CONSTRUCTION_RULE_REQUIREMENT_REGISTER = [
                                  "product_family='pipe' standard='ASME_B36.10M'/'ASME_B36.19M' at the "
                                  "same NPS, given an explicit mating-pipe schedule - not implemented by "
                                  "kgpe.resolver.engine today (single-family queries only).",
-        "blocks_geometry_generation_now": True,
+        "blocks_geometry_generation_now": False,
+        "resolved_in": "Prompt 15 Sec.15/17-18: kgpe.geometry_spec.profile.PROFILE_SOCKETWELD_ELBOW_TEE "
+                        "bumped v1->v2 (outside_diameter_mm moved from required to "
+                        "construction_derivable_dimensions, the same fix shape as the Prompt 13 reducer "
+                        "and Prompt 14 flange bore); kgpe.geometry.cross_family."
+                        "SocketweldBodyOutsideDiameterViaPipeRule now resolves body OD externally via an "
+                        "explicit mating pipe_standard, threaded through GeometryKernel.generate()'s "
+                        "product_kwargs. A NEW profile, PROFILE_SOCKETWELD_COUPLING, was also added this "
+                        "prompt for coupling_sw/half_coupling_sw (not covered by any Prompt 11 profile) "
+                        "using the same cross-family OD rule. Socket-weld caps were never affected - "
+                        "cap_body_diameter_mm is the cap's own authoritative dimension. Without an "
+                        "explicit pipe_standard, socketweld elbow/tee/cross/coupling/half-coupling "
+                        "requests now fail closed with CONSTRUCTION_RULE_UNAVAILABLE, never a fabricated "
+                        "body OD.",
     },
     {
         "product_family": "buttweld_fitting", "subtype": "cap", "standards": ["ASME_B16.9"],

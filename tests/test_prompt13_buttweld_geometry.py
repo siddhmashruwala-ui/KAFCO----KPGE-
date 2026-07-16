@@ -469,16 +469,23 @@ class TestDispatchExpansion(unittest.TestCase):
     def test_unimplemented_profile_still_structured_unsupported(self):
         # "flange_weld_neck" was this test's placeholder unsupported-
         # profile example at Prompt 13 time; Prompt 14 wired it into
-        # dispatch, so "olet_body" (still genuinely unwired, matching the
-        # adjacent test_olet_still_unsupported) is used here instead.
+        # dispatch, so it was switched to "olet_body" - which Prompt 15
+        # then ALSO wired into dispatch. Switched again to
+        # "olet_outlet_height" (still genuinely unwired - insufficient
+        # dims for any envelope, see geometry_spec/profile.py).
         spec = GeometrySpecification(readiness_status=GeometryReadinessStatus.GEOMETRY_READY,
-                                      geometry_profile_id="olet_body")
+                                      geometry_profile_id="olet_outlet_height")
         result = generate_geometry(spec)
         self.assertEqual(result.generation_status, GeometryGenerationStatus.UNSUPPORTED_GEOMETRY_PROFILE)
 
     def test_olet_still_unsupported(self):
+        # Prompt 15 wired "olet_body" into dispatch (weldolet/sockolet/
+        # threadolet) - this test now uses "olet_outlet_height" (the
+        # height-only MSS official-table profile, insufficient alone for
+        # any envelope - still genuinely unwired) to keep testing a real
+        # olet-family profile that remains unsupported.
         spec = GeometrySpecification(readiness_status=GeometryReadinessStatus.GEOMETRY_READY,
-                                      geometry_profile_id="olet_body")
+                                      geometry_profile_id="olet_outlet_height")
         result = generate_geometry(spec)
         self.assertEqual(result.generation_status, GeometryGenerationStatus.UNSUPPORTED_GEOMETRY_PROFILE)
 

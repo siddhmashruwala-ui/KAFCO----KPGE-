@@ -570,11 +570,14 @@ class TestGeometryKernel(unittest.TestCase):
     def test_unsupported_profile_returns_structured_status(self):
         # "flange_weld_neck" was this test's placeholder unsupported-
         # profile example at Prompt 12 time; Prompt 14 wired it into
-        # dispatch, so "olet_body" (still genuinely unwired) is used here
-        # instead - the test's actual subject is dispatch-miss handling,
-        # not any specific profile identity.
+        # dispatch, so it was switched to "olet_body" - which Prompt 15
+        # then ALSO wired into dispatch. Switched again to
+        # "olet_outlet_height" (still genuinely unwired - insufficient
+        # dims for any envelope, see geometry_spec/profile.py) - the
+        # test's actual subject is dispatch-miss handling, not any
+        # specific profile identity.
         spec = GeometrySpecification(readiness_status=GeometryReadinessStatus.GEOMETRY_READY,
-                                      geometry_profile_id="olet_body")
+                                      geometry_profile_id="olet_outlet_height")
         result = generate_geometry(spec)
         self.assertEqual(result.generation_status, GeometryGenerationStatus.UNSUPPORTED_GEOMETRY_PROFILE)
 

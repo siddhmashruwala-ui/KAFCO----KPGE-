@@ -184,3 +184,56 @@ class CapLengthSelectionRule(ConstructionRule):
         )
         return ConstructionRuleOutcome(ConstructionRuleStatus.RULE_APPLIED, self.rule_id, self.rule_version,
                                         value=value, detail=selection)
+
+
+class OletReinforcementEnvelopeConstructionRule(ConstructionRule):
+    """Prompt 15 Sec.9: MSS SP-97 does not publish a continuous
+    reinforcement-body contour for weldolet/sockolet/threadolet - only
+    discrete manufacturer body dimensions (height/face-to-face/base OD/
+    bore[+socket dia], all Bonney Forge VERIFIED_MANUFACTURER_SPECIFIC).
+    This rule formalizes a versioned, explicitly construction-derived
+    approximation: a straight-sided frustum from the base OD (run
+    interface, the wide end) to the branch bore diameter (branch
+    interface, the narrow end) over the published height - never claimed
+    as an MSS-published contour, only ever a labeled envelope
+    approximation (kgpe.geometry.builders.build_frustum_solid, the same
+    primitive Prompt 13's buttweld reducer uses)."""
+    rule_id = "olet_reinforcement_body_envelope_frustum"
+    rule_version = "1"
+
+    def apply(self, base_od_value, branch_opening_value, height_value, unit="mm"):
+        if base_od_value is None or branch_opening_value is None or height_value is None:
+            return ConstructionRuleOutcome(
+                ConstructionRuleStatus.RULE_INPUT_MISSING, self.rule_id, self.rule_version,
+                detail="base_od_value, branch_opening_value, and height_value are all required.")
+        try:
+            base_od = float(base_od_value)
+            branch = float(branch_opening_value)
+            height = float(height_value)
+        except (TypeError, ValueError):
+            return ConstructionRuleOutcome(ConstructionRuleStatus.RULE_UNSUPPORTED, self.rule_id,
+                                            self.rule_version, detail="Non-numeric input.")
+        if base_od <= NEAR_ZERO_MM or branch <= NEAR_ZERO_MM or height <= NEAR_ZERO_MM:
+            return ConstructionRuleOutcome(ConstructionRuleStatus.RULE_UNSUPPORTED, self.rule_id,
+                                            self.rule_version, detail="All inputs must be positive.")
+        if branch > base_od:
+            return ConstructionRuleOutcome(
+                ConstructionRuleStatus.RULE_UNSUPPORTED, self.rule_id, self.rule_version,
+                detail=f"branch_opening_value ({branch!r}) exceeds base_od_value ({base_od!r}) - the "
+                       f"envelope would taper outward, which this rule never constructs.")
+
+        value = ConstructionValue(
+            name="reinforcement_body_envelope", value=height, unit=unit,
+            rule_id=self.rule_id, rule_version=self.rule_version,
+            input_dimension_refs=[
+                {"name": "olet_base_outside_diameter_mm", "value": base_od, "unit": unit},
+                {"name": "olet_bore_diameter_mm", "value": branch, "unit": unit},
+                {"name": "olet_height_mm", "value": height, "unit": unit},
+            ],
+            derivation_trace=[
+                f"reinforcement envelope: frustum from base_OD={base_od}{unit} (run interface) to "
+                f"branch_opening={branch}{unit} (branch interface) over height={height}{unit} - a "
+                f"construction-derived approximate envelope, not an MSS SP-97-published contour."],
+        )
+        return ConstructionRuleOutcome(ConstructionRuleStatus.RULE_APPLIED, self.rule_id, self.rule_version,
+                                        value=value, detail="Applied.")

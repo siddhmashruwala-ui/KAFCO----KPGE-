@@ -318,13 +318,19 @@ class TestOrchestration(unittest.TestCase):
         self.assertIsNone(result.dimension_resolution)
 
     def test_profile_selection_failure_stage(self):
-        # coupling_sw is a real, directly-resolvable ASME_B16.11 canonical
-        # subtype with canonical data, but no geometry profile is defined
-        # for it (profile.py only covers elbow/tee/cross and cap_sw for
-        # socketweld_fitting) - a genuine GEOMETRY_PROFILE_UNAVAILABLE case
-        # reached through the real orchestration path.
-        result = _prep(product_family="socketweld_fitting", subtype="coupling_sw",
-                        standard="ASME_B16.11", primary_size="2", pressure_class="3000")
+        # "coupling_sw" was this test's example of a real, directly-
+        # resolvable-but-unprofiled subtype at Prompt 11 time; Prompt 15
+        # defined PROFILE_SOCKETWELD_COUPLING for it (and, in fact, every
+        # socketweld/olet subtype with live canonical data now has a
+        # profile). A subtype-less buttweld_fitting request is used
+        # instead - find_profile(family, subtype=None) matches no
+        # buttweld_fitting profile (all of them declare an explicit
+        # subtypes frozenset) while identity resolution itself still
+        # succeeds (the resolver's implicit-dimension-discovery path finds
+        # SOME dimension for NPS6 regardless of subtype) - a genuine,
+        # standard-based, always-reproducible GEOMETRY_PROFILE_UNAVAILABLE
+        # case reached through the real orchestration path.
+        result = _prep(product_family="buttweld_fitting", standard="ASME_B16.9", primary_size="6")
         self.assertEqual(result.identity_resolution.status, ResolutionStatus.RESOLVED)
         self.assertEqual(result.failed_stage, OrchestrationStage.PROFILE_SELECTION)
         self.assertEqual(result.geometry_specification.readiness_status,
@@ -535,10 +541,15 @@ class TestGeometryProfileCoverageMatrix(unittest.TestCase):
         self.assertTrue(weldolet_rows[0]["manufacturer_context_required"])
 
     def test_undefined_profile_rows_marked_not_yet_defined(self):
+        # "coupling_sw" was this test's example of an undefined-profile
+        # row at Prompt 11 time; Prompt 15 defined PROFILE_SOCKETWELD_
+        # COUPLING for it. "cap_en" (EN_10253 buttweld cap) remains
+        # genuinely undefined - confirmed live this prompt - and is used
+        # here instead.
         rows = cov.geometry_profile_coverage_matrix(_READER)
-        coupling_rows = [r for r in rows if r["subtype"] == "coupling_sw"]
-        self.assertTrue(coupling_rows)
-        self.assertEqual(coupling_rows[0]["geometry_readiness_status"], cov.PROFILE_NOT_YET_DEFINED)
+        cap_en_rows = [r for r in rows if r["subtype"] == "cap_en"]
+        self.assertTrue(cap_en_rows)
+        self.assertEqual(cap_en_rows[0]["geometry_readiness_status"], cov.PROFILE_NOT_YET_DEFINED)
 
 
 class TestConstructionRuleRegisterAndCompatibilityMapping(unittest.TestCase):
@@ -650,12 +661,22 @@ class TestRepresentativeScenarios(unittest.TestCase):
         self.assertIn("cap_length_standard_wall_mm", r.geometry_specification.required_dimensions)
 
     def test_08_socketweld_fitting_profile_assessment(self):
+        # Prompt 15 Sec.15/17-18 fix (PROFILE_SOCKETWELD_ELBOW_TEE v1->v2):
+        # outside_diameter_mm no longer required at this profile-
+        # compilation stage - resolved externally at the geometry-kernel
+        # layer via SocketweldBodyOutsideDiameterViaPipeRule instead - so
+        # this exact request now succeeds.
         r = _prep(product_family="socketweld_fitting", subtype="elbow_90_sw",
                    standard="ASME_B16.11", primary_size="2", pressure_class="3000")
-        self.assertEqual(r.geometry_specification.readiness_status,
-                          GeometryReadinessStatus.UNSUPPORTED_GEOMETRY_REQUEST)
-        self.assertIn("outside_diameter_mm", r.dimension_resolution.unsupported_reason)
-        # but socketweld_cap IS fully data-ready:
+        self.assertTrue(r.is_ready())
+        # an EXPLICIT outside_diameter_mm request is still genuinely
+        # unsupported - ASME_B16.11 has zero such facts under
+        # product_family='socketweld_fitting' anywhere.
+        r_explicit = _prep(product_family="socketweld_fitting", subtype="elbow_90_sw",
+                            standard="ASME_B16.11", primary_size="2", pressure_class="3000",
+                            dimensions=["outside_diameter_mm"])
+        self.assertEqual(r_explicit.identity_resolution.status, ResolutionStatus.UNSUPPORTED_REQUEST)
+        # socketweld_cap is, and always was, fully data-ready:
         r_cap = _prep(product_family="socketweld_fitting", subtype="cap_sw",
                        standard="ASME_B16.11", primary_size="2", pressure_class="3000")
         self.assertTrue(r_cap.is_ready())

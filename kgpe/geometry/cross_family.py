@@ -187,3 +187,72 @@ class ButtweldWallViaPipeScheduleRule(CrossFamilyDependencyRule):
         )
         return ConstructionRuleOutcome(ConstructionRuleStatus.RULE_APPLIED, self.rule_id, self.rule_version,
                                         value=cv, detail="Applied via cross-family pipe-schedule/wall reference.")
+
+
+class SocketweldBodyOutsideDiameterViaPipeRule(CrossFamilyDependencyRule):
+    """Prompt 15 Sec.15/18: ASME B16.11 publishes NO outside_diameter_mm
+    at all for socket-weld fitting bodies (elbow/tee/cross/coupling/
+    half-coupling) - confirmed live this prompt (zero
+    outside_diameter_mm facts anywhere under
+    product_family='socketweld_fitting') and already documented as a
+    curated source gap (Prompt 9 data_layer_audit._CURATED_SOURCE_GAPS)
+    and a construction-rule requirement (Prompt 11 geometry_spec/
+    coverage.py's CONSTRUCTION_RULE_REQUIREMENT_REGISTER, "blocks_
+    geometry_generation_now: True"). This rule derives the fitting
+    body's external envelope OD from an EXPLICITLY supplied mating pipe
+    standard, reusing the exact same od_req pattern
+    FlangeBoreViaPipeScheduleRule already uses - a pipe's OD is
+    schedule-independent (only wall_thickness_mm varies by schedule), so
+    no pipe_schedule input is needed or accepted here. NPS-only (ASME
+    B16.11 has no DN/JIS variant) - any other size system is
+    RULE_NOT_APPLICABLE, never guessed. Socket-weld CAPS do NOT use this
+    rule - cap_body_diameter_mm (source: CapDia_R_mm) is the cap's own
+    authoritative dimension, a genuinely different, self-contained fact
+    (see PROFILE_SOCKETWELD_CAP's notes)."""
+    rule_id = "socketweld_body_od_via_pipe_reference"
+    rule_version = "1"
+
+    def resolve(self, resolver, target_standard, target_size_system, target_size, pipe_standard):
+        from ..resolver import EngineeringRequest, ResolutionStatus
+
+        if target_size_system != "nps":
+            return ConstructionRuleOutcome(
+                ConstructionRuleStatus.RULE_NOT_APPLICABLE, self.rule_id, self.rule_version,
+                detail=f"ASME B16.11 socket-weld fittings are NPS-only - "
+                       f"target_size_system={target_size_system!r} is not eligible (no implicit "
+                       f"NPS/DN/JIS conversion is ever performed).")
+        if not pipe_standard:
+            return ConstructionRuleOutcome(
+                ConstructionRuleStatus.RULE_INPUT_MISSING, self.rule_id, self.rule_version,
+                detail="An explicit pipe_standard is required - never inferred or defaulted.")
+
+        od_req = EngineeringRequest(product_family="pipe", standard=pipe_standard, primary_size=target_size,
+                                     dimensions=["outside_diameter_mm"])
+        od_resolved = resolver.resolve(od_req)
+
+        if od_resolved.status == ResolutionStatus.QUARANTINED_ENGINEERING_DATA:
+            return ConstructionRuleOutcome(
+                ConstructionRuleStatus.RULE_BLOCKED_QUARANTINE, self.rule_id, self.rule_version,
+                detail=f"Mating pipe outside_diameter_mm is quarantined: {od_resolved.quarantine_details}")
+        if od_resolved.status != ResolutionStatus.RESOLVED:
+            return ConstructionRuleOutcome(
+                ConstructionRuleStatus.RULE_INPUT_MISSING, self.rule_id, self.rule_version,
+                detail=f"Mating pipe ({pipe_standard} NPS{target_size}) outside_diameter_mm did not "
+                       f"resolve: status={od_resolved.status}")
+
+        od_entry = od_resolved.resolved_dimensions["outside_diameter_mm"]
+        from .construction_value import ConstructionValue
+        cv = ConstructionValue(
+            name="outside_diameter_mm", value=float(od_entry["value"]), unit=od_entry["unit"],
+            rule_id=self.rule_id, rule_version=self.rule_version,
+            input_dimension_refs=[{"name": "outside_diameter_mm", "value": od_entry["value"],
+                                    "unit": od_entry["unit"], "source_ref": {
+                                        "product_family": "pipe", "standard": pipe_standard,
+                                        "nps": target_size, "source_file": od_entry.get("source_file")}}],
+            derivation_trace=[
+                f"cross-family: target=socketweld_fitting({target_standard} NPS{target_size}) <- "
+                f"source=pipe({pipe_standard} NPS{target_size}) - body OD equals the mating pipe's own "
+                f"OD, since ASME B16.11 does not publish a fitting-body OD of its own."],
+        )
+        return ConstructionRuleOutcome(ConstructionRuleStatus.RULE_APPLIED, self.rule_id, self.rule_version,
+                                        value=cv, detail="Applied via cross-family pipe-OD reference.")

@@ -327,3 +327,48 @@ def build_tee_multi_feature(run_radius, run_half_length, branch_radius, branch_l
 
     run_features = [dict(f, name=f"run_{f['name']}") for f in run_features]
     return _merge_meshes(run_mesh, run_features, branch_mesh, branch_features, "branch_")
+
+
+def build_two_arm_multi_feature(radius, length_a, length_b, angle_rad, radial_segments):
+    """Prompt 15 Sec.13: deterministic multi-feature socket-weld elbow
+    representation - two solid cylindrical arms joined at the origin, arm
+    A along global +Z spanning [0, length_a], arm B rotated by
+    `angle_rad` from +Z about the Y axis (bend plane = X-Z plane, matching
+    Prompt 13's buttweld-elbow bend-plane convention) spanning
+    [0, length_b] from the origin. Honest non-manifold overlap at the
+    joint, exactly like `build_tee_multi_feature` - no fillet/bend
+    transition is fabricated. `angle_rad = pi/2` for a 90deg elbow,
+    `pi/4` for a 45deg elbow."""
+    arm_a_mesh, arm_a_features = build_solid_cylinder(radius, length_a, radial_segments)
+    arm_b_mesh, arm_b_features = build_solid_cylinder(radius, length_b, radial_segments)
+    for i, v in enumerate(arm_b_mesh.vertices):
+        arm_b_mesh.vertices[i] = rotate_about_axis(v, (0.0, 0.0, 0.0), (0.0, 1.0, 0.0), angle_rad)
+
+    arm_a_features = [dict(f, name=f"arm_a_{f['name']}") for f in arm_a_features]
+    return _merge_meshes(arm_a_mesh, arm_a_features, arm_b_mesh, arm_b_features, "arm_b_")
+
+
+def build_cross_multi_feature(radius, run_half_length, branch_a_length, branch_b_length, radial_segments):
+    """Prompt 15 Sec.13: deterministic multi-feature socket-weld cross
+    representation - a run body (solid cylinder along global +Z, centred
+    at the origin, spanning [-run_half_length, +run_half_length]) plus
+    TWO branch arms along +Y and -Y (opposite directions), each a solid
+    cylinder from the origin outward. Honest non-manifold overlap at the
+    intersection, exactly like `build_tee_multi_feature` extended to a
+    fourth arm - no fillet/blend surface is fabricated."""
+    run_mesh, run_features = build_solid_cylinder(radius, 2.0 * run_half_length, radial_segments)
+    for i, v in enumerate(run_mesh.vertices):
+        run_mesh.vertices[i] = (v[0], v[1], v[2] - run_half_length)
+    run_features = [dict(f, name=f"run_{f['name']}") for f in run_features]
+
+    branch_a_mesh, branch_a_features = build_solid_cylinder(radius, branch_a_length, radial_segments)
+    for i, v in enumerate(branch_a_mesh.vertices):
+        branch_a_mesh.vertices[i] = rotate_about_axis(v, (0.0, 0.0, 0.0), (1.0, 0.0, 0.0), -math.pi / 2.0)
+
+    branch_b_mesh, branch_b_features = build_solid_cylinder(radius, branch_b_length, radial_segments)
+    for i, v in enumerate(branch_b_mesh.vertices):
+        branch_b_mesh.vertices[i] = rotate_about_axis(v, (0.0, 0.0, 0.0), (1.0, 0.0, 0.0), math.pi / 2.0)
+
+    mesh, features = _merge_meshes(run_mesh, run_features, branch_a_mesh, branch_a_features, "branch_a_")
+    mesh, features = _merge_meshes(mesh, features, branch_b_mesh, branch_b_features, "branch_b_")
+    return mesh, features

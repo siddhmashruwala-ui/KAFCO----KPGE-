@@ -26,13 +26,28 @@ from .mesh import Mesh
 from .builders import (
     build_hollow_cylinder, build_arc_swept_solid, build_arc_swept_hollow_solid,
     build_solid_cylinder, build_cap_solid, build_frustum_solid, build_tee_multi_feature,
+    build_two_arm_multi_feature, build_cross_multi_feature,
 )
 from .construction_value import ConstructionValue, PROVENANCE_LABEL_DERIVED
 from .construction_rules import (
     ConstructionRuleStatus, ALL_CONSTRUCTION_RULE_STATUSES, ConstructionRuleOutcome,
     ConstructionRule, PipeBoreConstructionRule, CapLengthSelectionRule,
+    OletReinforcementEnvelopeConstructionRule,
 )
-from .cross_family import CrossFamilyDependencyRule, FlangeBoreViaPipeScheduleRule, ButtweldWallViaPipeScheduleRule
+from .cross_family import (
+    CrossFamilyDependencyRule, FlangeBoreViaPipeScheduleRule, ButtweldWallViaPipeScheduleRule,
+    SocketweldBodyOutsideDiameterViaPipeRule,
+)
+from .socket_geometry import (
+    SocketGeometry, SocketFeatureValue, SocketGeometryError, build_socket_geometry, validate_socket_geometry,
+    SOCKET_STATUS_AUTHORITATIVE, SOCKET_STATUS_CONSTRUCTION_DERIVED, SOCKET_STATUS_DEPENDENCY_DERIVED,
+    SOCKET_STATUS_UNAVAILABLE, ALL_SOCKET_FEATURE_STATUSES,
+)
+from .outlet_geometry import (
+    OutletGeometry, OutletFeatureValue, OutletGeometryError, build_outlet_geometry, validate_outlet_geometry,
+    OUTLET_STATUS_AUTHORITATIVE, OUTLET_STATUS_CONSTRUCTION_DERIVED, OUTLET_STATUS_DEPENDENCY_DERIVED,
+    OUTLET_STATUS_UNAVAILABLE, ALL_OUTLET_FEATURE_STATUSES,
+)
 from .reducer_rules import ReducerPerEndOutsideDiameterRule
 from .wall_context import WallContext, WallContextError
 from .ports import (
@@ -71,8 +86,12 @@ from .products import tee as product_tee
 from .products import cap as product_cap
 from .products import reducer as product_reducer
 from .products import flange as product_flange
+from .products import socketweld_elbow_tee as product_socketweld_elbow_tee
+from .products import socketweld_coupling as product_socketweld_coupling
+from .products import socketweld_cap as product_socketweld_cap
+from .products import olet as product_olet
 
-GEOMETRY_PACKAGE_SCHEMA_VERSION = "geometry-kernel-package-2026.07.16"
+GEOMETRY_PACKAGE_SCHEMA_VERSION = "geometry-kernel-package-2026.07.16-p15"
 
 __all__ = [
     "GEOMETRY_RESULT_SCHEMA_VERSION", "GEOMETRY_KERNEL_VERSION", "GENERATION_PARAMETER_SCHEMA_VERSION",
@@ -81,10 +100,19 @@ __all__ = [
     "is_effectively_zero", "within_tolerance", "round_for_fingerprint", "degrees_to_radians",
     "Mesh", "build_hollow_cylinder", "build_arc_swept_solid", "build_arc_swept_hollow_solid",
     "build_solid_cylinder", "build_cap_solid", "build_frustum_solid", "build_tee_multi_feature",
+    "build_two_arm_multi_feature", "build_cross_multi_feature",
     "ConstructionValue", "PROVENANCE_LABEL_DERIVED",
     "ConstructionRuleStatus", "ALL_CONSTRUCTION_RULE_STATUSES", "ConstructionRuleOutcome",
     "ConstructionRule", "PipeBoreConstructionRule", "CapLengthSelectionRule",
+    "OletReinforcementEnvelopeConstructionRule",
     "CrossFamilyDependencyRule", "FlangeBoreViaPipeScheduleRule", "ButtweldWallViaPipeScheduleRule",
+    "SocketweldBodyOutsideDiameterViaPipeRule",
+    "SocketGeometry", "SocketFeatureValue", "SocketGeometryError", "build_socket_geometry",
+    "validate_socket_geometry", "SOCKET_STATUS_AUTHORITATIVE", "SOCKET_STATUS_CONSTRUCTION_DERIVED",
+    "SOCKET_STATUS_DEPENDENCY_DERIVED", "SOCKET_STATUS_UNAVAILABLE", "ALL_SOCKET_FEATURE_STATUSES",
+    "OutletGeometry", "OutletFeatureValue", "OutletGeometryError", "build_outlet_geometry",
+    "validate_outlet_geometry", "OUTLET_STATUS_AUTHORITATIVE", "OUTLET_STATUS_CONSTRUCTION_DERIVED",
+    "OUTLET_STATUS_DEPENDENCY_DERIVED", "OUTLET_STATUS_UNAVAILABLE", "ALL_OUTLET_FEATURE_STATUSES",
     "ReducerPerEndOutsideDiameterRule", "WallContext", "WallContextError",
     "ConnectionPort", "PortValidationError", "validate_port", "validate_ports",
     "OPENING_DIAMETER_PROVENANCE_AUTHORITATIVE", "OPENING_DIAMETER_PROVENANCE_DERIVED",
@@ -105,5 +133,6 @@ __all__ = [
     "GeometryKernel", "generate_geometry",
     "PipelineStage", "PipelineResult", "run_pipeline",
     "product_pipe", "product_buttweld_elbow", "product_tee", "product_cap", "product_reducer", "product_flange",
+    "product_socketweld_elbow_tee", "product_socketweld_coupling", "product_socketweld_cap", "product_olet",
     "GEOMETRY_PACKAGE_SCHEMA_VERSION",
 ]

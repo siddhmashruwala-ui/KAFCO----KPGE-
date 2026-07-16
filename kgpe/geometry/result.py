@@ -45,6 +45,26 @@ class TopologyRepresentation:
     # plain SOLID_EXTERNAL_ENVELOPE (which has no bolt pattern at all).
     SOLID_EXTERNAL_ENVELOPE_WITH_BOLT_HOLE_METADATA_NO_BOOLEAN_CUT = \
         "SOLID_EXTERNAL_ENVELOPE_WITH_BOLT_HOLE_METADATA_NO_BOOLEAN_CUT"
+    # Prompt 15 Sec.13: socket-weld/olet bodies whose socket cavities (or,
+    # for olets, run/branch interfaces) are represented as deterministic
+    # FEATURE METADATA (kgpe.geometry.socket_geometry.SocketGeometry /
+    # kgpe.geometry.outlet_geometry.OutletGeometry) rather than boolean-
+    # cut into the mesh - mirrors the bolt-hole-metadata pattern exactly.
+    # SOLID form: a single straight/cap body (coupling, half-coupling,
+    # cap). MULTI_FEATURE form: two-or-more overlapping arms (elbow, tee,
+    # cross) - non-manifold at the intersection, exactly like
+    # DETERMINISTIC_MULTI_FEATURE_MESH_NON_MANIFOLD_AT_INTERSECTION, but
+    # explicitly naming the additional socket metadata.
+    SOLID_EXTERNAL_ENVELOPE_WITH_SOCKET_METADATA_NO_BOOLEAN_CUT = \
+        "SOLID_EXTERNAL_ENVELOPE_WITH_SOCKET_METADATA_NO_BOOLEAN_CUT"
+    MULTI_FEATURE_MESH_WITH_SOCKET_METADATA_NO_BOOLEAN_CUT = \
+        "MULTI_FEATURE_MESH_WITH_SOCKET_METADATA_NO_BOOLEAN_CUT"
+    # Prompt 15 Sec.13: an olet's construction-derived frustum envelope
+    # (base OD -> branch bore diameter) with run/branch interface
+    # metadata attached - never claimed as an MSS SP-97-published
+    # contour (see OletReinforcementEnvelopeConstructionRule).
+    CONSTRUCTION_DERIVED_ENVELOPE_WITH_INTERFACE_METADATA_NO_BOOLEAN_CUT = \
+        "CONSTRUCTION_DERIVED_ENVELOPE_WITH_INTERFACE_METADATA_NO_BOOLEAN_CUT"
 
 
 ALL_TOPOLOGY_REPRESENTATIONS = frozenset({
@@ -53,6 +73,9 @@ ALL_TOPOLOGY_REPRESENTATIONS = frozenset({
     TopologyRepresentation.DETERMINISTIC_MULTI_FEATURE_MESH_NON_MANIFOLD_AT_INTERSECTION,
     TopologyRepresentation.HOLLOW_ANNULAR_BODY_WITH_BOLT_HOLE_METADATA_NO_BOOLEAN_CUT,
     TopologyRepresentation.SOLID_EXTERNAL_ENVELOPE_WITH_BOLT_HOLE_METADATA_NO_BOOLEAN_CUT,
+    TopologyRepresentation.SOLID_EXTERNAL_ENVELOPE_WITH_SOCKET_METADATA_NO_BOOLEAN_CUT,
+    TopologyRepresentation.MULTI_FEATURE_MESH_WITH_SOCKET_METADATA_NO_BOOLEAN_CUT,
+    TopologyRepresentation.CONSTRUCTION_DERIVED_ENVELOPE_WITH_INTERFACE_METADATA_NO_BOOLEAN_CUT,
 })
 
 

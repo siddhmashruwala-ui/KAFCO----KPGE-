@@ -1369,3 +1369,145 @@ for the full list) - zero modifications to `generator.py`, `rules/*.py`,
 `schema.py`, `dimension_library.py`, `kgpe/resolver/*`, or any canonical
 data-layer file; data-layer fingerprint unchanged at
 `9238ab3cb896101c545450df6f0ff070301b4ba68117771b4105e87606c2c873`.
+
+
+## Prompt 15 addendum (Phase 4 - ASME B16.11 socket-weld / MSS SP-97 branch-outlet geometry, final product family)
+
+**Canonical coverage (Sec.2, inspected live):** ASME B16.11 elbow_90_sw/
+elbow_45_sw/tee_sw/cross_sw all publish centre_to_end_mm, fitting_body_
+wall_thickness_mm, socket_bore_diameter_min/max_mm, socket_bore_depth_
+min/max_mm, socket_wall_thickness_min/max_mm - but ZERO outside_
+diameter_mm anywhere. coupling_sw/half_coupling_sw publish end_to_end_mm
+(each subtype its OWN value) + socket bore/depth, but no body_wall_
+thickness and no OD. cap_sw publishes cap_body_diameter_mm (its own
+authoritative OD) + cap_socket_length_mm + socket_bore_depth_min/max_mm -
+but NO socket bore diameter column at all (a genuine source gap). The
+adapter's own J_mm/socket_wall_min_at_bottom_mm column is validated but
+never converted into a fact for ANY subtype - zero facts, confirmed live.
+MSS SP-97 weldolet/sockolet/threadolet publish olet_height_mm/olet_face_
+to_face_mm/olet_base_outside_diameter_mm/olet_bore_diameter_mm (sockolet
+additionally olet_socket_diameter_mm) - all VERIFIED_MANUFACTURER_SPECIFIC
+(Bonney Forge), no MSS-standard-text alternative. weldolet_full/
+weldolet_reducing publish only branch_outlet_height_mm (VERIFIED_
+AUTHORITATIVE, the official MSS table) - insufficient alone for any
+envelope. elbolet/latrolet/sweepolet/nippolet have ZERO canonical
+coverage - not even a `FITTING_TYPE_*` vocabulary constant exists -
+confirmed live, never fabricated.
+
+**Socket geometry model (Sec.5/8/11):** `SocketGeometry` exposes depth/
+diameter/bore/wall_thickness/shoulder/stop/transition/opening, each
+tagged AUTHORITATIVE/CONSTRUCTION_DERIVED/UNAVAILABLE. `shoulder`/`stop`
+are ALWAYS UNAVAILABLE (the J_mm gap above; no published assembly-gap
+dimension either). `transition` is CONSTRUCTION_DERIVED only when BOTH a
+bore diameter and `fitting_body_wall_thickness_mm` are available (elbow/
+tee/cross only). Socket-weld cap's `diameter`/`bore`/`opening` are
+UNAVAILABLE (no bore-diameter column exists for caps) rather than
+approximated from the cap's own body OD. Sockets are represented as
+FEATURE METADATA ONLY at each port - never boolean-cut into the body
+mesh, mirroring Prompt 14's bolt-hole-metadata pattern exactly.
+
+**Outlet geometry model (Sec.6/9/12):** `OutletGeometry` exposes run_
+interface (olet_base_outside_diameter_mm - the run-pipe attachment
+footprint, not a flow opening), branch_interface/outlet_opening (olet_
+bore_diameter_mm - the one dimension common to weldolet/sockolet/
+threadolet, confirmed live to scale consistently with base OD, unlike
+sockolet's separate olet_socket_diameter_mm which does NOT follow a
+simple ordering relationship and is deliberately excluded from this
+model, exposed only as sockolet-specific metadata), reinforcement_body
+(CONSTRUCTION_DERIVED, see below), blend_region (ALWAYS UNAVAILABLE - no
+fillet/blend dimension published for this family).
+
+**Body outside diameter cross-family rule (Sec.15):**
+`SocketweldBodyOutsideDiameterViaPipeRule` (new, `kgpe/geometry/
+cross_family.py`) resolves elbow/tee/cross/coupling/half-coupling body OD
+from an EXPLICITLY supplied mating `pipe_standard` (NPS-only, no schedule
+needed - pipe OD is schedule-independent, reusing the exact `od_req`
+pattern `FlangeBoreViaPipeScheduleRule` already established) - fails
+closed (`RULE_INPUT_MISSING`) if no pipe_standard is supplied, never
+defaults. Socket-weld caps never use this rule - `cap_body_diameter_mm`
+is the cap's own authoritative dimension.
+
+**Reinforcement-body construction rule (Sec.9):**
+`OletReinforcementEnvelopeConstructionRule` (new, `kgpe/geometry/
+construction_rules.py`) builds a straight-sided frustum envelope from
+`olet_base_outside_diameter_mm` (wide end, run interface) to `olet_bore_
+diameter_mm` (narrow end, branch interface) over `olet_height_mm`
+(`kgpe.geometry.builders.build_frustum_solid`, the same primitive the
+Prompt 13 buttweld reducer uses) - explicitly labeled construction-
+derived, NEVER claimed as an MSS SP-97-published contour. `olet_face_to_
+face_mm` is exposed as authoritative metadata only (not consumed by this
+simplified construction - no run-pipe assembly is modeled, Sec.44
+discipline).
+
+**Connection ports (Sec.7):** elbow - inlet_socket/outlet_socket; tee -
+run_inlet_socket/run_outlet_socket/branch_socket; cross - adds branch_a_
+socket/branch_b_socket; coupling - socket_a/socket_b (both open);
+half-coupling - pipe_side (real socket) + closed_side (opening_
+diameter_provenance=NOT_MODELED, no fabricated opening - mirrors Prompt
+14's blind-flange precedent exactly); cap - socket_opening (opening
+diameter NOT_MODELED - no bore-diameter fact exists for caps); olet -
+run_connection/branch_connection.
+
+**Manufacturer-specific isolation (Sec.10, preserves Prompt 9/10 model):**
+`PROFILE_OLET_BODY.manufacturer_specific == MFR_REQUIRED` means `kgpe.
+geometry_spec.compiler` already fails closed with `MANUFACTURER_CONTEXT_
+REQUIRED` (established Prompt 10) whenever a weldolet/sockolet/threadolet
+request carries no `manufacturer_profile` - confirmed live this prompt;
+never silently defaults to Bonney Forge. The official MSS height table
+(weldolet_full/weldolet_reducing) never requires manufacturer context -
+it is genuinely standard-text-authoritative.
+
+**Validation (Sec.11-12):** socket depth/diameter positive, min<=max
+where both present (never silently clipped, raises `SocketGeometryError`);
+outlet run/branch interface positive, branch interface must not exceed
+run interface (confirmed true for every weldolet/sockolet/threadolet row
+inspected live) - raises `OutletGeometryError` otherwise. Product
+builders additionally enforce socket bore diameter < derived body OD and
+olet bore < base OD before generating any mesh.
+
+**Topology honesty (Sec.13):** three new `TopologyRepresentation` values
+- `SOLID_EXTERNAL_ENVELOPE_WITH_SOCKET_METADATA_NO_BOOLEAN_CUT`
+(coupling/half-coupling/cap), `MULTI_FEATURE_MESH_WITH_SOCKET_METADATA_
+NO_BOOLEAN_CUT` (elbow/tee/cross - overlapping arms, non-manifold at the
+joint, exactly like Prompt 13's buttweld tee), and `CONSTRUCTION_DERIVED_
+ENVELOPE_WITH_INTERFACE_METADATA_NO_BOOLEAN_CUT` (olet frustum) - never
+claims a boolean-cut watertight solid.
+
+**Two frozen-file exceptions (documented, same pattern as Prompts 13/14):**
+`geometry_spec/profile.py`'s `PROFILE_SOCKETWELD_ELBOW_TEE` bumped v1->v2
+(`outside_diameter_mm` removed from `required_dimensions`, retained only
+in `construction_derivable_dimensions`) - a genuine blocking defect
+(ASME B16.11 has zero OD facts for this family, making `GEOMETRY_READY`
+structurally unreachable), the identical shape as the Prompt 13 reducer
+and Prompt 14 flange-bore fixes. A NEW profile, `PROFILE_SOCKETWELD_
+COUPLING`, was added for coupling_sw/half_coupling_sw (no Prompt 11
+profile ever covered this pair). `geometry_spec/coverage.py`'s
+socketweld register entry and 3 tests in `tests/
+test_prompt11_geometry_handoff.py` were corrected to match the now-
+correct behavior; all 95 Prompt 11 tests still pass.
+
+**Verified this prompt (18 representative scenarios, Sec.18):** socket
+elbow_90/elbow_45 generation + deterministic angle-sensitive
+fingerprints; socket tee/cross generation + full port sets; coupling
+(two open sockets) / half-coupling (one socket + documented closed side)
+generation + distinct end_to_end_mm per subtype; cap generation without
+any cross-family rule; missing pipe-context fails closed
+(`CONSTRUCTION_RULE_UNAVAILABLE`, never fabricated); weldolet/sockolet/
+threadolet generation with manufacturer context; manufacturer-context-
+required blocks without it; unsupported olet_outlet_height profile
+remains structured `UNSUPPORTED_GEOMETRY_PROFILE`; repeatable and size/
+subtype-sensitive fingerprints; full Prompt 4-14 pipe/buttweld/flange
+regression unchanged; demo unchanged.
+
+**Full regression:** 748 total tests (684 Prompt 4-14 + 64 new) pass;
+`git status` confirms only the expected additive/modified geometry files
+changed (see README Prompt 15 addendum for the full list) - zero
+modifications to `generator.py`, `rules/*.py`, `schema.py`, `dimension_
+library.py`, `kgpe/resolver/*`, or any canonical data-layer file;
+data-layer fingerprint unchanged at
+`9238ab3cb896101c545450df6f0ff070301b4ba68117771b4105e87606c2c873`. With
+this prompt, every structured engineering dataset already present in
+KGPE (pipe, flange, buttweld, socket-weld, branch-outlet) has a
+corresponding deterministic geometry implementation - annotation,
+visualization, export, optimization, and production hardening remain for
+later prompts per the 20-prompt plan.

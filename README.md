@@ -402,3 +402,84 @@ unchanged at
 `9238ab3cb896101c545450df6f0ff070301b4ba68117771b4105e87606c2c873`.
 Blind/slip-on flange geometry, socketweld, olets, and the hologram viewer
 remain out of scope - deferred to later prompts per the 20-prompt plan.
+
+
+## Prompt 15 addendum (Phase 4 - ASME B16.11 socket-weld and MSS SP-97 branch-outlet geometry, final product family)
+
+```
+    geometry/socket_geometry.py         - SocketGeometry model (depth, diameter, bore, wall
+                              thickness, shoulder, stop, transition, opening) - each feature
+                              explicitly AUTHORITATIVE/CONSTRUCTION_DERIVED/UNAVAILABLE;
+                              shoulder/stop ALWAYS unavailable (J_mm/socket_wall_min_at_
+                              bottom_mm has zero ingested facts anywhere); metadata only,
+                              never boolean-cut into a mesh
+    geometry/outlet_geometry.py          - OutletGeometry model (run interface, branch
+                              interface, outlet axis, outlet opening, reinforcement body,
+                              blend region) for MSS SP-97 weldolet/sockolet/threadolet;
+                              blend_region always unavailable (no fillet data published)
+    geometry/cross_family.py (+)          - appended SocketweldBodyOutsideDiameterViaPipeRule
+                              (same od_req pattern as FlangeBoreViaPipeScheduleRule) - ASME
+                              B16.11 publishes no fitting-body OD at all; resolved from the
+                              mating pipe's own OD via an explicit pipe_standard
+    geometry/construction_rules.py (+)      - appended OletReinforcementEnvelopeConstructionRule
+                              (frustum envelope base_OD -> branch bore over height -
+                              explicitly construction-derived, never MSS-published)
+    geometry/builders.py (+)                 - build_two_arm_multi_feature (socket-weld
+                              elbow, angled arms), build_cross_multi_feature (socket-weld
+                              cross, 4 arms)
+    geometry/products/socketweld_elbow_tee.py - 90/45deg elbow, tee, cross (one profile,
+                              internally subtype-dispatched); external body envelope via
+                              cross-family pipe OD, socket cavities as feature metadata only
+    geometry/products/socketweld_coupling.py   - coupling (2 open sockets) / half-coupling
+                              (1 socket + 1 documented closed_side port, no opening -
+                              mirrors Prompt 14's blind-flange precedent)
+    geometry/products/socketweld_cap.py         - cap: own authoritative body OD
+                              (cap_body_diameter_mm), no cross-family rule needed; socket
+                              diameter genuinely UNAVAILABLE (no such column in the source)
+    geometry/products/olet.py                    - weldolet/sockolet/threadolet: frustum
+                              envelope via OletReinforcementEnvelopeConstructionRule;
+                              manufacturer-gated (Bonney Forge, MANUFACTURER_CONTEXT_REQUIRED
+                              if absent); sockolet's extra socket-diameter fact exposed as
+                              metadata only, never used as the frustum's small-end radius
+    geometry/result.py (+)                        - 3 new TopologyRepresentation values:
+                              SOLID_EXTERNAL_ENVELOPE_WITH_SOCKET_METADATA_NO_BOOLEAN_CUT,
+                              MULTI_FEATURE_MESH_WITH_SOCKET_METADATA_NO_BOOLEAN_CUT,
+                              CONSTRUCTION_DERIVED_ENVELOPE_WITH_INTERFACE_METADATA_NO_BOOLEAN_CUT
+    geometry/kernel.py (+)                         - 4 new dispatch entries: socketweld_elbow_tee,
+                              socketweld_coupling, socketweld_cap, olet_body
+  tests/test_prompt15_socketweld_olet_geometry.py - 64 tests (coverage inspection,
+                              subtype matrices, manufacturer isolation, SocketGeometry/
+                              OutletGeometry model, cross-family OD rule, olet reinforcement
+                              rule, all representative scenarios, dispatch, geometric sanity,
+                              full Prompt 4-14 regression, demo unchanged)
+```
+
+**Two frozen-file exceptions (documented, same pattern as Prompts 13/14):**
+`geometry_spec/profile.py`'s `PROFILE_SOCKETWELD_ELBOW_TEE` bumped v1->v2
+(`outside_diameter_mm` removed from `required_dimensions`, retained in
+`construction_derivable_dimensions` only) - ASME B16.11 has zero
+`outside_diameter_mm` facts anywhere under `product_family=
+'socketweld_fitting'`, so requiring it made `GEOMETRY_READY` structurally
+unreachable for every elbow/tee/cross request - the identical defect
+shape as the Prompt 13 reducer and Prompt 14 flange-bore fixes. A NEW
+profile, `PROFILE_SOCKETWELD_COUPLING`, was added for coupling_sw/
+half_coupling_sw (no Prompt 11 profile ever covered this subtype pair).
+`geometry_spec/coverage.py`'s socketweld construction-rule register entry
+was updated (`blocks_geometry_generation_now: True -> False`, `resolved_
+in` added) and 3 tests in `test_prompt11_geometry_handoff.py` were
+corrected to match (all 95 Prompt 11 tests still pass).
+
+**Verified this prompt:** all 18 representative scenarios (socket elbow/
+tee/cross/coupling/half-coupling/cap, weldolet/sockolet/threadolet,
+manufacturer-context-required, unsupported olet subtypes, missing-pipe-
+context fails closed, deterministic fingerprints) pass; 748 total tests
+(684 Prompt 4-14 + 64 new) pass; demo unchanged; no engineering-source/
+CRM/JS/HTML/KFEE file, `generator.py`, or `rules/*.py` file modified;
+data-layer fingerprint unchanged at
+`9238ab3cb896101c545450df6f0ff070301b4ba68117771b4105e87606c2c873`.
+elbolet/latrolet/sweepolet/nippolet remain UNSUPPORTED_BY_CANONICAL_DATA
+(zero canonical coverage, confirmed live - never fabricated). With this
+prompt, every structured engineering dataset already present in KGPE has
+a corresponding deterministic geometry implementation - the hologram
+viewer, export formats, and assemblies remain out of scope, deferred to
+later prompts per the 20-prompt plan.

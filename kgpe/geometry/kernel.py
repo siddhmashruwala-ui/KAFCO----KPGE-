@@ -24,6 +24,10 @@ from .products import tee as tee_product
 from .products import cap as cap_product
 from .products import reducer as reducer_product
 from .products import flange as flange_product
+from .products import socketweld_elbow_tee as socketweld_elbow_tee_product
+from .products import socketweld_coupling as socketweld_coupling_product
+from .products import socketweld_cap as socketweld_cap_product
+from .products import olet as olet_product
 
 # Prompt 13 Sec.32/Prompt 14 Sec.35: expanded ONLY for successfully
 # implemented and validated product profiles - reducer_concentric/
@@ -34,6 +38,16 @@ from .products import flange as flange_product
 # defined (Prompt 11) - it serves ASME_B16.5/JIS_B2220/EN_1092-1 alike;
 # products/flange.py itself distinguishes standard-specific bore/raised-
 # face availability via the resolved dimensions actually present.
+# Prompt 15 Sec.17: expanded for ASME B16.11 socket-weld elbow/45/tee/
+# cross ("socketweld_elbow_tee" - one profile, one module, internally
+# subtype-dispatched exactly like flange.py's standard-dispatch),
+# coupling/half-coupling ("socketweld_coupling", a NEW Prompt 15 profile -
+# no Prompt 11 profile covered this subtype pair), cap
+# ("socketweld_cap") and MSS SP-97 weldolet/sockolet/threadolet
+# ("olet_body"). elbolet/latrolet/sweepolet/nippolet and
+# "olet_outlet_height" (insufficient dims for any envelope - height-only)
+# remain UNDISPATCHED - genuinely unsupported/insufficient, never
+# fabricated.
 _PRODUCT_DISPATCH = {
     "pipe": pipe_product,
     "buttweld_elbow": buttweld_elbow_product,
@@ -41,6 +55,10 @@ _PRODUCT_DISPATCH = {
     "buttweld_cap": cap_product,
     "buttweld_reducer": reducer_product,
     "flange_weld_neck": flange_product,
+    "socketweld_elbow_tee": socketweld_elbow_tee_product,
+    "socketweld_coupling": socketweld_coupling_product,
+    "socketweld_cap": socketweld_cap_product,
+    "olet_body": olet_product,
 }
 
 

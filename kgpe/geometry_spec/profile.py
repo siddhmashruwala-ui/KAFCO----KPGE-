@@ -237,11 +237,32 @@ _SOCKETWELD_BODY_SUBTYPES = frozenset({
     VOC.FITTING_TYPE_ELBOW_90_SW, VOC.FITTING_TYPE_ELBOW_45_SW,
     VOC.FITTING_TYPE_TEE_SW, VOC.FITTING_TYPE_CROSS_SW,
 })
+# ---------------------------------------------------------------------------
+# Prompt 15 Sec.15/17-18 fix (v1->v2): outside_diameter_mm was originally
+# listed in BOTH required_dimensions and construction_derivable_dimensions
+# - exactly the same structural defect shape Prompt 13 fixed for the
+# buttweld reducer's OD and Prompt 14 fixed for the flange bore: since
+# ASME_B16.11 has ZERO outside_diameter_mm facts under
+# product_family='socketweld_fitting' anywhere (confirmed live this
+# prompt), and kgpe.geometry_spec.compiler only checks required_dimensions
+# against resolved_dimensions (never construction_derivable_dimensions),
+# listing it as required made GEOMETRY_READY structurally unreachable for
+# EVERY socketweld elbow/tee/cross request. Fixed the same way: removed
+# from required_dimensions, retained only in
+# construction_derivable_dimensions - the body OD is now resolved
+# EXTERNALLY at the geometry-kernel layer via
+# kgpe.geometry.cross_family.SocketweldBodyOutsideDiameterViaPipeRule
+# (an explicit mating-pipe-standard cross-family reference, threaded
+# through GeometryKernel.generate()'s product_kwargs, exactly like Prompt
+# 13/14's wall-context/bore patterns) - never fabricated, and the request
+# fails closed (CONSTRUCTION_RULE_UNAVAILABLE) if no pipe context is
+# supplied.
+# ---------------------------------------------------------------------------
 PROFILE_SOCKETWELD_ELBOW_TEE = GeometryProfile(
-    profile_id="socketweld_elbow_tee", version="1",
+    profile_id="socketweld_elbow_tee", version="2",
     product_family=VOC.PRODUCT_FAMILY_SOCKETWELD_FITTING, subtypes=_SOCKETWELD_BODY_SUBTYPES,
     required_dimensions=frozenset({
-        VOC.DIM_OUTSIDE_DIAMETER, VOC.DIM_CENTRE_TO_END, VOC.DIM_FITTING_BODY_WALL_THICKNESS,
+        VOC.DIM_CENTRE_TO_END, VOC.DIM_FITTING_BODY_WALL_THICKNESS,
         VOC.DIM_SOCKET_BORE_DIAMETER_MIN, VOC.DIM_SOCKET_BORE_DEPTH_MIN,
     }),
     optional_dimensions=frozenset({
@@ -249,13 +270,41 @@ PROFILE_SOCKETWELD_ELBOW_TEE = GeometryProfile(
         VOC.DIM_SOCKET_WALL_THICKNESS_MIN, VOC.DIM_SOCKET_WALL_THICKNESS_MAX,
     }),
     construction_derivable_dimensions=frozenset({VOC.DIM_OUTSIDE_DIAMETER}),
-    notes="ASME_B16.11 publishes socket bore/wall/depth and fitting_body_wall_thickness_mm, but "
-          "NO outside_diameter_mm at all under product_family='socketweld_fitting' - this is a "
-          "curated, documented source gap already established in Prompt 9 "
+    notes="v2 (Prompt 15): outside_diameter_mm no longer required at profile-compilation stage - "
+          "ASME_B16.11 publishes socket bore/wall/depth and fitting_body_wall_thickness_mm, but "
+          "NO outside_diameter_mm at all under product_family='socketweld_fitting' - a curated, "
+          "documented source gap already established in Prompt 9 "
           "(data_layer_audit._CURATED_SOURCE_GAPS): the body OD is genuinely the mating pipe's "
-          "OD (a cross-family lookup into ASME_B36 pipe data by NPS), not an ASME_B16.11 fact. "
-          "Cross-family dimension resolution is not implemented by kgpe.resolver.engine - "
-          "registered as a construction-rule requirement for Prompt 12.",
+          "OD, resolved via kgpe.geometry.cross_family.SocketweldBodyOutsideDiameterViaPipeRule "
+          "at the geometry-kernel layer (see profile version history above).",
+)
+
+# ---------------------------------------------------------------------------
+# Socketweld coupling/half-coupling (Prompt 15 - no Prompt 11 profile
+# existed for this subtype pair). Confirmed live: coupling_sw/
+# half_coupling_sw publish end_to_end_mm (laying length, distinct per
+# subtype) + socket bore/wall/depth - but, like elbow/tee/cross, NO
+# outside_diameter_mm and NO fitting_body_wall_thickness_mm at all (that
+# field is elbow/tee/cross-only). Body OD resolved the same way, via
+# SocketweldBodyOutsideDiameterViaPipeRule.
+# ---------------------------------------------------------------------------
+PROFILE_SOCKETWELD_COUPLING = GeometryProfile(
+    profile_id="socketweld_coupling", version="1",
+    product_family=VOC.PRODUCT_FAMILY_SOCKETWELD_FITTING,
+    subtypes=frozenset({VOC.FITTING_TYPE_COUPLING_SW, VOC.FITTING_TYPE_HALF_COUPLING_SW}),
+    required_dimensions=frozenset({
+        VOC.DIM_END_TO_END, VOC.DIM_SOCKET_BORE_DIAMETER_MIN, VOC.DIM_SOCKET_BORE_DEPTH_MIN,
+    }),
+    optional_dimensions=frozenset({
+        VOC.DIM_SOCKET_BORE_DIAMETER_MAX, VOC.DIM_SOCKET_BORE_DEPTH_MAX,
+        VOC.DIM_SOCKET_WALL_THICKNESS_MIN, VOC.DIM_SOCKET_WALL_THICKNESS_MAX,
+    }),
+    construction_derivable_dimensions=frozenset({VOC.DIM_OUTSIDE_DIAMETER}),
+    notes="Coupling/half-coupling share one socket-geometry table (source: "
+          "couplings_and_half_couplings) but each has its OWN end_to_end_mm (laying length) fact "
+          "(source columns E/F respectively) - never averaged or substituted between the two. "
+          "No fitting_body_wall_thickness_mm exists for this section (elbow/tee/cross-only field) - "
+          "body OD is resolved the same cross-family way as socketweld_elbow_tee.",
 )
 
 
@@ -328,7 +377,7 @@ PROFILE_OLET_OUTLET_HEIGHT = GeometryProfile(
 PROFILE_REGISTRY = [
     PROFILE_PIPE, PROFILE_FLANGE_WELD_NECK, PROFILE_BUTTWELD_ELBOW, PROFILE_BUTTWELD_TEE_EQUAL,
     PROFILE_BUTTWELD_CAP, PROFILE_BUTTWELD_REDUCER, PROFILE_SOCKETWELD_ELBOW_TEE,
-    PROFILE_SOCKETWELD_CAP, PROFILE_OLET_BODY, PROFILE_OLET_OUTLET_HEIGHT,
+    PROFILE_SOCKETWELD_COUPLING, PROFILE_SOCKETWELD_CAP, PROFILE_OLET_BODY, PROFILE_OLET_OUTLET_HEIGHT,
 ]
 
 
