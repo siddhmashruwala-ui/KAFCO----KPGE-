@@ -127,3 +127,66 @@ labeled as verified-vs-estimated in the side panel.
 2. `holoSpecFor()` KGPE-first / heuristic-fallback wiring, with a visible
    "KGPE VERIFIED" vs "ESTIMATED" badge in the hologram side panel.
 3. Regression pass + updated docs + commit/push (both repos).
+
+
+## Update — 2026-07-16, Phase 2 complete
+
+Both "Next steps" items from the original decision are now implemented and
+live:
+
+1. **Part Configurator** — every Order Command line item has an
+   "Engineering ID" button opening a modal with cascading dropdowns
+   (family -> standard -> subtype -> size -> rating -> manufacturer
+   profile), all populated live from `/kgpe/discovery`. RESOLVE calls
+   `/kgpe/geometry` and shows the honest outcome; SAVE only enables once
+   KGPE returns `GEOMETRY_GENERATED`. Saved as
+   `it.kgpe_identity = {request, verified, fingerprint, saved_at}` on the
+   line item in `KAFCO_Orders.json` (additive field, defaulted to `null`
+   for every existing item via `ogNorm()`).
+
+2. **`holoSpecFor()` KGPE-first wiring** — when an item has a saved,
+   verified `kgpe_identity`, `holoSpecFor()` now overlays specific
+   KGPE-authoritative values on top of its normal heuristic spec:
+   `outside_diameter_mm` -> `spec._od`, any `wall_thickness*` measurement
+   -> `spec._wt`, and (for flanges) the `bolt_pattern` feature's bolt
+   circle/count combined with a `flange_thickness*` measurement ->
+   `spec._flg` (converted to the inches-based 4-tuple `holoBuildModel`
+   already expects, so the existing Three.js construction code for the
+   flange family needed zero changes). Every other field - and every item
+   without a saved identity - is completely untouched; the merge only
+   ever overlays fields KGPE actually returned, never invents or
+   approximates on KGPE's behalf.
+
+   The KGPE fetch itself never blocks rendering: `holoSpecFor()` always
+   produces the normal heuristic spec first, then kicks off a
+   fire-and-forget `/kgpe/geometry` call (cached per item + request) that
+   silently upgrades the already-visible hologram (mini preview, MES hero,
+   or the full viewer if still open) once it resolves. A side-panel badge
+   (`kgpeBadgeHtml()`) shows KGPE VERIFIED / RESOLVING / NOT YET READY /
+   UNAVAILABLE so the distinction is never hidden from the user.
+
+Verified: `node --check` clean on the full extracted script; all new
+function/variable names confirmed present in the live-served HTML;
+`/data`, `/orders`, `/version` unaffected; full KGPE suite still 748/748
+after both sessions. Both repos committed and pushed.
+
+### Known limitation carried forward
+
+Only flange-family items get a `_flg` override today (the only family
+whose `holoBuildModel` "authoritative override" shape was mapped this
+session). Buttweld/socketweld/olet items with a saved, verified identity
+still get the OD/WT overlay but keep their existing heuristic shape
+construction otherwise - extending per-family overrides to the other
+product types is straightforward (same pattern, different
+`geometry_payload.features`/`measurements` keys) but not yet done.
+
+### Next recommended milestone
+
+Extend the verified-dimension overlay to buttweld/socketweld/olet
+families (map their `geometry_payload` shapes the same way the flange
+family was mapped this session), and consider exposing KGPE's raw mesh
+(`geometry_payload.mesh`) as an optional "true canonical geometry" render
+mode for users who want the exact standard-published solid rather than
+the parametric approximation - a larger undertaking requiring a
+BufferGeometry adapter and is out of scope for the current additive-only
+integration style.
