@@ -93,24 +93,46 @@ PROFILE_PIPE = GeometryProfile(
 # are VERIFIED_AUTHORITATIVE for JIS_B2220 only (80 facts each) - ASME_B16.5
 # and EN_1092-1 publish neither. hub_base_diameter_mm/length_through_hub_mm
 # have ZERO facts for any flange standard at all.
+#
+# Prompt 14 Sec.14-16 fix (v1->v2): bore_diameter_mm was originally listed
+# in BOTH required_dimensions and construction_derivable_dimensions - this
+# made GEOMETRY_READY structurally unreachable for ASME_B16.5/EN_1092-1
+# (bore never resolves directly there; see kgpe.geometry.compiler's
+# required-dimension gate, which does not consult
+# construction_derivable_dimensions at all) - a genuine blocking defect of
+# exactly the same shape Prompt 13 Sec.20 fixed for the buttweld reducer's
+# outside_diameter_mm. Fixed the same way: bore_diameter_mm removed from
+# required_dimensions, added to optional_dimensions (so JIS_B2220's direct
+# authoritative bore is still captured when present) and retained in
+# construction_derivable_dimensions (so ASME_B16.5's cross-family
+# pipe-schedule derivation - kgpe.geometry.cross_family.
+# FlangeBoreViaPipeScheduleRule, resolved externally and threaded through
+# GeometryKernel.generate()'s product_kwargs, exactly like Prompt 13's
+# wall-context/reducer-OD pattern - still applies at the kernel layer).
+# EN_1092-1's bore remains genuinely UNAVAILABLE this prompt (no DN-based
+# cross-family rule has been built/approved yet - Prompt 14 Sec.44 scope
+# discipline) - flanges for EN_1092-1 generate as SOLID_EXTERNAL_ENVELOPE
+# (no bore modeled), never fabricated.
 # ---------------------------------------------------------------------------
 PROFILE_FLANGE_WELD_NECK = GeometryProfile(
-    profile_id="flange_weld_neck", version="1",
+    profile_id="flange_weld_neck", version="2",
     product_family=VOC.PRODUCT_FAMILY_FLANGE, subtypes=frozenset({"weld_neck"}),
     required_dimensions=frozenset({
         VOC.DIM_OUTSIDE_DIAMETER, VOC.DIM_FLANGE_THICKNESS_WELD_NECK,
         VOC.DIM_BOLT_CIRCLE_DIAMETER, VOC.DIM_BOLT_HOLE_DIAMETER,
-        VOC.DIM_NUM_BOLTS, VOC.DIM_BOLT_SIZE_DESIGNATION, VOC.DIM_BORE_DIAMETER,
+        VOC.DIM_NUM_BOLTS, VOC.DIM_BOLT_SIZE_DESIGNATION,
     }),
-    optional_dimensions=frozenset({VOC.DIM_RAISED_FACE_DIAMETER}),
+    optional_dimensions=frozenset({VOC.DIM_RAISED_FACE_DIAMETER, VOC.DIM_BORE_DIAMETER}),
     construction_derivable_dimensions=frozenset(
         {VOC.DIM_BORE_DIAMETER, VOC.DIM_HUB_BASE_DIAMETER, VOC.DIM_LENGTH_THROUGH_HUB}),
-    notes="bore_diameter_mm is VERIFIED_AUTHORITATIVE for JIS_B2220 only - ASME_B16.5 and "
-          "EN_1092-1 publish no per-class bore. Existing rules/flange.py falls back to a "
-          "pipe_schedule cross-reference (dl.get_pipe via _default_pipe_standard) for those "
-          "two standards - a legacy heuristic, not an approved Phase-3 construction rule "
-          "(Sec.11). raised_face_diameter_mm is likewise JIS_B2220-only, hence optional not "
-          "required. hub_base_diameter_mm/length_through_hub_mm have NO facts at all for any "
+    notes="v2 (Prompt 14): bore_diameter_mm no longer required at profile-compilation stage - "
+          "resolved directly (JIS_B2220, now optional) or via cross-family construction rule "
+          "at the geometry-kernel layer (ASME_B16.5, kgpe.geometry.cross_family."
+          "FlangeBoreViaPipeScheduleRule) or left unmodeled (EN_1092-1, SOLID_EXTERNAL_ENVELOPE). "
+          "raised_face_diameter_mm is JIS_B2220-only, hence optional not required - and even where "
+          "present, raised-face HEIGHT has zero production facts for any standard, so no raised-"
+          "face geometry is generated this prompt (diameter-only partial feature, Prompt 14 "
+          "Sec.19). hub_base_diameter_mm/length_through_hub_mm have NO facts at all for any "
           "flange standard - hub/neck taper is not modeled, matching rules/flange.py's own "
           "documented v1 scope limitation.",
 )

@@ -31,12 +31,28 @@ class TopologyRepresentation:
     SOLID_EXTERNAL_ENVELOPE = "SOLID_EXTERNAL_ENVELOPE"
     DETERMINISTIC_MULTI_FEATURE_MESH_NON_MANIFOLD_AT_INTERSECTION = \
         "DETERMINISTIC_MULTI_FEATURE_MESH_NON_MANIFOLD_AT_INTERSECTION"
+    # Prompt 14 Sec.12-13/31: a hollow annular body (through-bore flange)
+    # whose bolt holes are represented as deterministic FEATURE METADATA
+    # (position/diameter/bolt-circle layout - see kgpe.geometry.
+    # bolt_pattern.BoltPattern) rather than as actual boolean-cut geometry
+    # in the mesh - the mesh surface itself remains a plain solid annular
+    # disc, never claimed as boolean-cut or watertight-with-holes.
+    HOLLOW_ANNULAR_BODY_WITH_BOLT_HOLE_METADATA_NO_BOOLEAN_CUT = \
+        "HOLLOW_ANNULAR_BODY_WITH_BOLT_HOLE_METADATA_NO_BOOLEAN_CUT"
+    # Prompt 14 Sec.8/31: same as above but for a flange body with no
+    # resolved bore (external-envelope solid disc) that STILL carries a
+    # bolt-hole metadata pattern - distinguished from the buttweld-elbow's
+    # plain SOLID_EXTERNAL_ENVELOPE (which has no bolt pattern at all).
+    SOLID_EXTERNAL_ENVELOPE_WITH_BOLT_HOLE_METADATA_NO_BOOLEAN_CUT = \
+        "SOLID_EXTERNAL_ENVELOPE_WITH_BOLT_HOLE_METADATA_NO_BOOLEAN_CUT"
 
 
 ALL_TOPOLOGY_REPRESENTATIONS = frozenset({
     TopologyRepresentation.HOLLOW_SWEPT_SOLID,
     TopologyRepresentation.SOLID_EXTERNAL_ENVELOPE,
     TopologyRepresentation.DETERMINISTIC_MULTI_FEATURE_MESH_NON_MANIFOLD_AT_INTERSECTION,
+    TopologyRepresentation.HOLLOW_ANNULAR_BODY_WITH_BOLT_HOLE_METADATA_NO_BOOLEAN_CUT,
+    TopologyRepresentation.SOLID_EXTERNAL_ENVELOPE_WITH_BOLT_HOLE_METADATA_NO_BOOLEAN_CUT,
 })
 
 

@@ -197,7 +197,16 @@ CONSTRUCTION_RULE_REQUIREMENT_REGISTER = [
         "future_rule_required": "A formalized cross-family construction rule: bore = mating pipe's "
                                  "BoreID at the same NPS/DN + an explicit pipe schedule/wall-thickness "
                                  "input, promoted from legacy heuristic to an approved Phase-3+ rule.",
-        "blocks_geometry_generation_now": True,
+        "blocks_geometry_generation_now": False,
+        "resolved_in": "Prompt 14 Sec.14-16/18 (profile.py v1->v2 removed bore_diameter_mm from "
+                        "PROFILE_FLANGE_WELD_NECK's required_dimensions; ASME_B16.5's bore is now "
+                        "resolved externally via kgpe.geometry.cross_family."
+                        "FlangeBoreViaPipeScheduleRule and threaded through GeometryKernel.generate()'s "
+                        "product_kwargs, exactly like Prompt 13's wall-context pattern. EN_1092-1's bore "
+                        "remains genuinely unavailable - no DN-based cross-family rule exists yet; "
+                        "EN_1092-1 flanges generate as SOLID_EXTERNAL_ENVELOPE with no bore modeled, "
+                        "which is why this entry is retained (historical + partially-resolved record) "
+                        "rather than deleted.",
     },
     {
         "product_family": "flange", "subtype": "weld_neck", "standards": ["ASME_B16.5", "JIS_B2220", "EN_1092-1"],

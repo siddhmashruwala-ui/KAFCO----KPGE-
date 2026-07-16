@@ -467,8 +467,12 @@ class TestDispatchExpansion(unittest.TestCase):
             self.assertIn(profile_id, _PRODUCT_DISPATCH)
 
     def test_unimplemented_profile_still_structured_unsupported(self):
+        # "flange_weld_neck" was this test's placeholder unsupported-
+        # profile example at Prompt 13 time; Prompt 14 wired it into
+        # dispatch, so "olet_body" (still genuinely unwired, matching the
+        # adjacent test_olet_still_unsupported) is used here instead.
         spec = GeometrySpecification(readiness_status=GeometryReadinessStatus.GEOMETRY_READY,
-                                      geometry_profile_id="flange_weld_neck")
+                                      geometry_profile_id="olet_body")
         result = generate_geometry(spec)
         self.assertEqual(result.generation_status, GeometryGenerationStatus.UNSUPPORTED_GEOMETRY_PROFILE)
 

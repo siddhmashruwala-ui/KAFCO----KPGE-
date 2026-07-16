@@ -307,11 +307,14 @@ class TestCrossFamilyDependencyRule(unittest.TestCase):
                                 target_size="6", pipe_standard=None, pipe_schedule=None)
         self.assertEqual(outcome.status, ConstructionRuleStatus.RULE_INPUT_MISSING)
 
-    def test_flange_bore_not_wired_into_kernel_dispatch(self):
-        # Sec.16: this rule is proven standalone only - never invoked by
-        # the kernel's pipe/elbow product dispatch this prompt.
+    def test_flange_bore_wired_into_kernel_dispatch_in_prompt_14(self):
+        # Sec.16 (Prompt 12): this rule was proven standalone only, not
+        # yet invoked by kernel dispatch. Prompt 14 Sec.15/38 wires it
+        # into kgpe.geometry.products.flange for ASME_B16.5 (the only
+        # standard where this rule's own NPS-only scope applies) - the
+        # rule itself is unchanged, only the dispatch wiring is new.
         import kgpe.geometry.kernel as kernel_module
-        self.assertNotIn("flange_weld_neck", kernel_module._PRODUCT_DISPATCH)
+        self.assertIn("flange_weld_neck", kernel_module._PRODUCT_DISPATCH)
 
 
 class TestTessellation(unittest.TestCase):
@@ -565,8 +568,13 @@ class TestGeometryKernel(unittest.TestCase):
         self.assertFalse(result.is_generated())
 
     def test_unsupported_profile_returns_structured_status(self):
+        # "flange_weld_neck" was this test's placeholder unsupported-
+        # profile example at Prompt 12 time; Prompt 14 wired it into
+        # dispatch, so "olet_body" (still genuinely unwired) is used here
+        # instead - the test's actual subject is dispatch-miss handling,
+        # not any specific profile identity.
         spec = GeometrySpecification(readiness_status=GeometryReadinessStatus.GEOMETRY_READY,
-                                      geometry_profile_id="flange_weld_neck")
+                                      geometry_profile_id="olet_body")
         result = generate_geometry(spec)
         self.assertEqual(result.generation_status, GeometryGenerationStatus.UNSUPPORTED_GEOMETRY_PROFILE)
 

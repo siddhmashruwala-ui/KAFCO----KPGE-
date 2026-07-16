@@ -23,18 +23,24 @@ from .products import buttweld_elbow as buttweld_elbow_product
 from .products import tee as tee_product
 from .products import cap as cap_product
 from .products import reducer as reducer_product
+from .products import flange as flange_product
 
-# Prompt 13 Sec.32: expanded ONLY for successfully implemented and
-# validated product profiles - reducer_concentric/reducer_eccentric BOTH
-# resolve to the single "buttweld_reducer" geometry_profile_id (Prompt 11
-# profile.py); products/reducer.py itself distinguishes them via the
-# engineering identity's subtype field.
+# Prompt 13 Sec.32/Prompt 14 Sec.35: expanded ONLY for successfully
+# implemented and validated product profiles - reducer_concentric/
+# reducer_eccentric BOTH resolve to the single "buttweld_reducer"
+# geometry_profile_id (Prompt 11 profile.py); products/reducer.py itself
+# distinguishes them via the engineering identity's subtype field.
+# "flange_weld_neck" (Prompt 14) is the ONE flange geometry_profile_id
+# defined (Prompt 11) - it serves ASME_B16.5/JIS_B2220/EN_1092-1 alike;
+# products/flange.py itself distinguishes standard-specific bore/raised-
+# face availability via the resolved dimensions actually present.
 _PRODUCT_DISPATCH = {
     "pipe": pipe_product,
     "buttweld_elbow": buttweld_elbow_product,
     "buttweld_tee_equal": tee_product,
     "buttweld_cap": cap_product,
     "buttweld_reducer": reducer_product,
+    "flange_weld_neck": flange_product,
 }
 
 

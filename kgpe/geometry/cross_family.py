@@ -39,12 +39,23 @@ class CrossFamilyDependencyRule:
 
 
 class FlangeBoreViaPipeScheduleRule(CrossFamilyDependencyRule):
-    """Proof-of-concept cross-family rule (Sec.16): derives a flange's
-    bore from an EXPLICITLY supplied mating pipe standard + schedule, via
-    the normal `EngineeringResolver` public interface only. Only supports
-    NPS-based flanges/pipes for now (ASME) - never silently cross-converts
-    DN/JIS sizes onto an NPS pipe lookup; any other size system is
-    `RULE_NOT_APPLICABLE`, not guessed."""
+    """Cross-family rule (Prompt 12 Sec.16, wired into production use by
+    Prompt 14 Sec.15/38 - kgpe.geometry.products.flange for ASME_B16.5):
+    derives a flange's bore from an EXPLICITLY supplied mating pipe
+    standard + schedule, via the normal `EngineeringResolver` public
+    interface only. Only supports NPS-based flanges/pipes for now (ASME) -
+    never silently cross-converts DN/JIS sizes onto an NPS pipe lookup;
+    any other size system is `RULE_NOT_APPLICABLE`, not guessed. Prompt 14
+    inspected this rule thoroughly (Sec.15) and found it already satisfies
+    every real-use requirement (explicit pipe-standard/schedule context,
+    fail-closed on missing/ambiguous input, separate flange/pipe identity
+    preservation, no registry write) - no functional change was needed,
+    only this docstring update and the new dispatch wiring in
+    kgpe.geometry.kernel. EN_1092-1 (DN-based) is deliberately NOT
+    supported by this rule this prompt - extending it would require a new
+    DN-based pipe cross-reference path, which Prompt 14 treats as a
+    separate, not-yet-approved scope decision (Sec.44 discipline) rather
+    than silently broadening this rule's tested NPS-only behaviour."""
     rule_id = "flange_bore_via_pipe_schedule_cross_reference"
     rule_version = "1"
 

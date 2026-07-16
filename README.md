@@ -328,3 +328,77 @@ file modified; data-layer fingerprint unchanged at
 `9238ab3cb896101c545450df6f0ff070301b4ba68117771b4105e87606c2c873`.
 Flange, socketweld, olet geometry and the hologram viewer remain
 out of scope - deferred to later prompts per the 20-prompt plan.
+
+
+## Prompt 14 addendum (Phase 4 - ASME B16.5 / JIS B2220 / EN 1092-1 flange geometry expansion)
+
+```
+    geometry/bolt_pattern.py           - BoltPattern model (bolt-circle diameter,
+                              hole diameter, count, centre, axis, deterministic angular-zero
+                              + equal spacing, ordered hole centres) + build_bolt_pattern()/
+                              validate_bolt_pattern() - deterministic, serializable, never an
+                              unstructured coordinate list
+    geometry/mating_interface.py         - MatingInterface metadata model (face centre/
+                              normal, OD, bolt-circle, bolt-hole count/diameter, face type)
+                              + FACE_TYPE_NOT_TRACKED/RAISED_FACE/FLAT_FACE vocabulary -
+                              metadata only, no assembly logic
+    geometry/products/flange.py           - weld-neck flange builder: hollow annular body
+                              when bore known, solid external envelope when not; bolt
+                              holes represented as feature metadata only (never boolean-cut
+                              into the mesh); bore via direct optional dimension (JIS) or
+                              externally-resolved FlangeBoreViaPipeScheduleRule construction
+                              value (ASME, passed in via product_kwargs) or unavailable (EN);
+                              raised-face and hub exposed as honest partial/unavailable
+                              metadata features, never fabricated
+    geometry/cross_family.py (docstring only) - FlangeBoreViaPipeScheduleRule inspected
+                              and confirmed already production-ready (explicit context
+                              required, fails closed, no registry write); deliberately NOT
+                              extended to DN/EN_1092-1 this prompt (anti-scope-creep)
+    geometry/result.py (+)                    - two new TopologyRepresentation values:
+                              HOLLOW_ANNULAR_BODY_WITH_BOLT_HOLE_METADATA_NO_BOOLEAN_CUT,
+                              SOLID_EXTERNAL_ENVELOPE_WITH_BOLT_HOLE_METADATA_NO_BOOLEAN_CUT
+    geometry/kernel.py (+)                     - "flange_weld_neck" wired into
+                              _PRODUCT_DISPATCH
+    geometry/__init__.py (+)                    - bolt_pattern/mating_interface/
+                              product_flange exports; package schema version bumped to
+                              "geometry-kernel-package-2026.07.16"
+  tests/test_prompt14_flange_geometry.py - 107 tests (coverage inspection, subtype
+                              matrix, cross-standard isolation, bolt-pattern model/
+                              placement/validation/fingerprint-sensitivity, bore policy
+                              incl. FlangeBoreViaPipeScheduleRule, raised-face/hub honesty,
+                              blind-flange non-support, topology honesty, dispatch, all 50
+                              scenarios, full Prompt 4-13 regression, demo unchanged)
+```
+
+**One frozen-file exception (documented, same pattern as Prompt 13's
+reducer fix):** `geometry_spec/profile.py`'s `PROFILE_FLANGE_WELD_NECK`
+bumped v1->v2 - `bore_diameter_mm` removed from `required_dimensions`
+(kept in `optional_dimensions` and `construction_derivable_dimensions`),
+because requiring a dimension that is genuinely unresolvable for 2 of 3
+standards (ASME without cross-family context, EN entirely) made
+`GEOMETRY_READY` structurally unreachable for those standards. This is a
+genuine blocking defect, not a redesign. `geometry_spec/coverage.py`'s
+flange-bore register entry and 7 tests in
+`test_prompt11_geometry_handoff.py` were corrected to match; all 92
+Prompt 11 tests still pass.
+
+**Honest coverage findings:** only the weld-neck subtype has ever been
+recorded in canonical data for any of the 3 standards - blind, slip-on,
+and other flange_type values return no canonical facts and no geometry
+profile (`find_profile("flange", "blind")` is `None`); a blind-subtype
+request fails at `ENGINEERING_RESOLUTION`/`UNSUPPORTED_REQUEST`, before
+geometry is ever attempted. Raised-face diameter is known only for JIS
+(and only when explicitly requested); RF height has zero facts for any
+standard, so RF geometry is never generated - only metadata is exposed.
+Hub/neck dimensions have zero facts for any standard - hub geometry is
+never attempted.
+
+**Verified this prompt:** all 50 representative scenarios pass; 684 total
+tests (575 Prompt 4-13 + 107 new + 2 Prompt 12/13 tests updated to use a
+still-genuinely-unwired profile id now that flange dispatch is wired)
+pass; demo unchanged; no engineering-source/CRM/JS/HTML/KFEE file,
+`generator.py`, or `rules/*.py` file modified; data-layer fingerprint
+unchanged at
+`9238ab3cb896101c545450df6f0ff070301b4ba68117771b4105e87606c2c873`.
+Blind/slip-on flange geometry, socketweld, olets, and the hologram viewer
+remain out of scope - deferred to later prompts per the 20-prompt plan.

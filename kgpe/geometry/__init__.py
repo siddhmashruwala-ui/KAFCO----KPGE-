@@ -59,6 +59,10 @@ from .result import (
     TopologyRepresentation, ALL_TOPOLOGY_REPRESENTATIONS,
 )
 from .product_api import GeometryInputError, ConstructionRuleUnavailableError, ProductGeometryBuild
+from .bolt_pattern import BoltPattern, BoltPatternError, build_bolt_pattern, validate_bolt_pattern
+from .mating_interface import (
+    MatingInterface, FACE_TYPE_NOT_TRACKED, FACE_TYPE_RAISED_FACE, FACE_TYPE_FLAT_FACE, ALL_FACE_TYPES,
+)
 from .kernel import GeometryKernel, generate_geometry
 from .pipeline import PipelineStage, PipelineResult, run_pipeline
 from .products import pipe as product_pipe
@@ -66,8 +70,9 @@ from .products import buttweld_elbow as product_buttweld_elbow
 from .products import tee as product_tee
 from .products import cap as product_cap
 from .products import reducer as product_reducer
+from .products import flange as product_flange
 
-GEOMETRY_PACKAGE_SCHEMA_VERSION = "geometry-kernel-package-2026.07.15"
+GEOMETRY_PACKAGE_SCHEMA_VERSION = "geometry-kernel-package-2026.07.16"
 
 __all__ = [
     "GEOMETRY_RESULT_SCHEMA_VERSION", "GEOMETRY_KERNEL_VERSION", "GENERATION_PARAMETER_SCHEMA_VERSION",
@@ -95,8 +100,10 @@ __all__ = [
     "GeometryGenerationStatus", "ALL_GEOMETRY_GENERATION_STATUSES", "GeometryResult",
     "TopologyRepresentation", "ALL_TOPOLOGY_REPRESENTATIONS",
     "GeometryInputError", "ConstructionRuleUnavailableError", "ProductGeometryBuild",
+    "BoltPattern", "BoltPatternError", "build_bolt_pattern", "validate_bolt_pattern",
+    "MatingInterface", "FACE_TYPE_NOT_TRACKED", "FACE_TYPE_RAISED_FACE", "FACE_TYPE_FLAT_FACE", "ALL_FACE_TYPES",
     "GeometryKernel", "generate_geometry",
     "PipelineStage", "PipelineResult", "run_pipeline",
-    "product_pipe", "product_buttweld_elbow", "product_tee", "product_cap", "product_reducer",
+    "product_pipe", "product_buttweld_elbow", "product_tee", "product_cap", "product_reducer", "product_flange",
     "GEOMETRY_PACKAGE_SCHEMA_VERSION",
 ]

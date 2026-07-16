@@ -1219,3 +1219,153 @@ geometry files changed (see README Prompt 13 addendum for the full list)
 `dimension_library.py`, `kgpe/resolver/*`, or any canonical data-layer
 file; data-layer fingerprint unchanged at
 `9238ab3cb896101c545450df6f0ff070301b4ba68117771b4105e87606c2c873`.
+
+
+## Prompt 14 addendum (Phase 4 - ASME B16.5 / JIS B2220 / EN 1092-1 flange geometry expansion)
+
+**Canonical flange coverage (Sec.2-3, inspected live, not assumed):**
+ASME B16.5 - OD, weld-neck thickness, bolt-circle diameter, bolt-hole
+diameter, bolt count, size designation all authoritative; no bore, no
+raised-face dims, no hub/neck dims. JIS B2220 - same core set as ASME,
+PLUS direct authoritative bore diameter AND raised-face diameter (no RF
+height, no hub/neck dims). EN 1092-1 - same core set as ASME; no bore, no
+raised-face dims, no hub/neck dims. Every subtype other than weld-neck
+(blind, slip-on, etc.) has zero facts in canonical data for any of the 3
+standards - `find_profile("flange", "blind")` returns `None` and a
+blind-subtype request fails at `ENGINEERING_RESOLUTION`/
+`UNSUPPORTED_REQUEST`, before geometry generation is ever reached.
+
+**Cross-standard identity isolation (Sec.4):** ASME Class, JIS K-rating,
+and EN PN are never converted into one another and never used to fill
+each other's gaps. NPS, DN, and JIS nominal size are never cross-
+converted. EN's missing bore is never filled from JIS's bore fact; ASME's
+missing RF dimension is never filled from JIS's RF fact. Each standard's
+facts are queried against its own `standard` identity field only.
+
+**Coordinate convention (Sec.5):** flange axis +Z, mating face at z=0,
+bolt pattern and bore centred on the Z-axis, positive axial direction
+points away from the mating face along the body/hub. Bolt-hole angular
+zero is a documented, versioned convention (`angular_zero_deg` on
+`BoltPattern`, default 0.0 = +X axis), holes ordered counter-clockwise by
+construction, never platform-dependent.
+
+**Connection ports and mating interface (Sec.6-9):** a through-bore
+flange gets one primary `ConnectionPort` (`role="primary_connection"`,
+position at origin, direction along -Z) carrying opening-diameter
+provenance exactly as Prompt 13's ports do. A blind-subtype flange would
+not expose an opening port (moot this prompt - blind is unsupported).
+`MatingInterface` is a metadata-only model (face centre/normal, OD,
+bolt-circle, bolt-hole count/diameter, face type) - never used for
+assembly logic.
+
+**Flange body and thickness semantics (Sec.8-9):** body is a hollow
+annular cylinder when bore is known/derivable, a solid cylinder
+otherwise - never a fabricated bore. Only weld-neck thickness is ever
+applied (`Thickness_WeldNeck_mm`); no other subtype-specific thickness
+field has any facts, so no cross-subtype thickness substitution is
+possible or attempted.
+
+**Bolt pattern model (Sec.10-13):** `BoltPattern` (frozen, serializable)
+holds bolt-circle diameter, hole diameter, count, centre, axis, angular-
+zero, and the full ordered list of hole centres - never an unstructured
+coordinate list. Placement is deterministic: equal angular spacing,
+one documented angular-zero convention, stable ordering, validated for
+exact hole-centre radius, equal spacing, count/diameter match, and no
+duplicates. Bolt holes are represented as **feature metadata only**
+(`bolt_pattern` feature, `type: "bolt_hole_metadata"`) - the body mesh is
+never boolean-cut; this is declared honestly via two new topology values
+rather than claimed as a watertight solid.
+
+**Flange bore policy (Sec.14-16):** priority order is (1) direct
+authoritative canonical bore [JIS only], (2) explicit cross-family
+dependency via `FlangeBoreViaPipeScheduleRule` [ASME, externally resolved
+by the caller and passed in as a `ConstructionValue` via
+`product_kwargs`], (3) unavailable [EN - no direct fact, rule not
+extended to DN this prompt]. `FlangeBoreViaPipeScheduleRule` was
+inspected and found already production-ready (requires explicit
+pipe-standard/schedule context, fails closed on ambiguous/missing
+context, preserves flange/pipe identity separately, preserves
+provenance, never writes to the canonical registry) and was deliberately
+NOT extended to DN/EN_1092-1, to avoid scope creep and to avoid breaking
+the existing Prompt 12 non-NPS-rejection test. A construction-derived
+bore value preserves its source pipe facts, rule id/version, and
+target/source identity in `ConstructionValue.to_dict()` - never relabeled
+as source-published.
+
+**Blind flange (Sec.17):** genuinely unsupported - confirmed live that no
+`flange_type` other than weld-neck/`None` has ever been ingested for any
+of the 3 standards. Not implemented this prompt; documented as a known
+limitation rather than guessed at.
+
+**Raised face and face type (Sec.18-20):** RF diameter has authoritative
+facts only for JIS, and only when explicitly requested (Prompt 11's
+optional-dimension request semantics). RF height has zero facts for any
+standard. Because both dimensions are required to generate real RF
+geometry, RF is exposed only as a metadata feature with status
+`PARTIAL_DIAMETER_KNOWN_HEIGHT_UNAVAILABLE` (JIS, diameter requested) or
+`UNAVAILABLE_NO_AUTHORITATIVE_DIMENSIONS` (ASME/EN, or JIS without an
+explicit request) - never generated as a mesh feature, never inferred
+from the historical Prompt 3/9 legacy quarantine fixture. Face type is
+exposed as `FACE_TYPE_NOT_TRACKED` for every flange this prompt - canonical
+data tracks an RF dimension for JIS but never a face-type identity flag
+for any standard, so RF is never silently assumed.
+
+**Hub (Sec.21-23):** zero facts for hub diameter/length or neck OD/length
+for any standard. No construction rule was attempted - hub is always
+reported as an `UNAVAILABLE_NO_AUTHORITATIVE_DIMENSIONS_ANY_STANDARD`
+metadata feature. The historical Class-300 legacy quarantine fixture was
+not treated as production truth.
+
+**ASME/JIS/EN architecture reuse and rating preservation (Sec.24-27):**
+all 3 standards share the same body/bolt-pattern/port/validation
+primitives while retaining separate engineering identities - `pressure_class`
+(ASME), `jis_k` (JIS), and `pn` (EN) are never normalized into one generic
+pressure value.
+
+**Validation and sanity checks (Sec.28-30):** feature-level validation
+covers OD, thickness, bolt-circle diameter, bolt-hole diameter and count,
+bolt-hole radius/angular-spacing/duplication, and hollow-body bore
+(measured off the actual mesh, not just the input dimension). Sanity
+checks enforce bolt-circle < OD, positive hole diameter, hole envelope
+(bolt-circle radius + hole radius) <= OD, bore < OD when hollow, and
+positive thickness.
+
+**Topology honesty (Sec.31):** every flange self-reports one of
+`SOLID_EXTERNAL_ENVELOPE_WITH_BOLT_HOLE_METADATA_NO_BOOLEAN_CUT` (bore
+unknown) or `HOLLOW_ANNULAR_BODY_WITH_BOLT_HOLE_METADATA_NO_BOOLEAN_CUT`
+(bore known/derived) - never claimed as a boolean-cut watertight solid.
+
+**One frozen-file exception (documented, same pattern as Prompt 13's
+reducer fix):** `geometry_spec/profile.py`'s `PROFILE_FLANGE_WELD_NECK`
+bumped v1->v2 (removed `bore_diameter_mm` from `required_dimensions`,
+retained in `optional_dimensions` and `construction_derivable_dimensions`)
+- a genuine blocking defect (bore is unresolvable for 2 of 3 standards
+without external context, making `GEOMETRY_READY` structurally
+unreachable), not a redesign. `geometry_spec/coverage.py`'s flange-bore
+register entry and 7 tests in `tests/test_prompt11_geometry_handoff.py`
+were corrected to match the now-correct behavior; all 92 Prompt 11 tests
+still pass.
+
+**Verified this prompt (50 representative scenarios, Sec.36-40):** ASME
+body/OD/thickness/bolt-circle/hole validation, deterministic placement,
+repeatability, through-bore with valid cross-family bore context,
+missing/ambiguous bore context fails closed, blind unsupported (structured
+`UNSUPPORTED_REQUEST`), RF/hub reported as structured-unavailable; JIS
+body generation, K-rating and size-system preserved, direct bore
+resolves, RF partial-diameter-known metadata; EN body generation, PN and
+DN preserved, bore/RF/hub genuinely unavailable; cross-standard isolation
+- nominally similar sizes/ratings never merge identity, fingerprints
+differ when geometry differs, one standard's missing feature never
+filled from another; full kernel regression - ASME/JIS/EN pipe, elbow,
+tee, cap, concentric/eccentric reducer generation unchanged, demo
+unchanged.
+
+**Full regression:** 684 total tests (575 Prompt 4-13 + 107 new + 2
+Prompt 12/13 tests updated to reference a still-genuinely-unwired profile
+id, `olet_body`, now that flange dispatch is wired into
+`_PRODUCT_DISPATCH`) pass; `git status` confirms only the expected
+additive/modified geometry files changed (see README Prompt 14 addendum
+for the full list) - zero modifications to `generator.py`, `rules/*.py`,
+`schema.py`, `dimension_library.py`, `kgpe/resolver/*`, or any canonical
+data-layer file; data-layer fingerprint unchanged at
+`9238ab3cb896101c545450df6f0ff070301b4ba68117771b4105e87606c2c873`.

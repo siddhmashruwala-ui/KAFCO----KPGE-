@@ -212,9 +212,16 @@ class TestGeometryProfileRegistry(unittest.TestCase):
         self.assertIsNone(find_profile("nonexistent_family", None))
 
     def test_find_profile_flange_weld_neck(self):
+        # Prompt 14 Sec.14-16 fix (v1->v2): bore_diameter_mm moved out of
+        # required_dimensions (it made GEOMETRY_READY structurally
+        # unreachable for ASME_B16.5/EN_1092-1) into optional_dimensions +
+        # construction_derivable_dimensions - see profile.py's own note.
         profile = find_profile("flange", "weld_neck")
         self.assertEqual(profile.profile_id, "flange_weld_neck")
-        self.assertIn("bore_diameter_mm", profile.required_dimensions)
+        self.assertEqual(profile.version, "2")
+        self.assertNotIn("bore_diameter_mm", profile.required_dimensions)
+        self.assertIn("bore_diameter_mm", profile.optional_dimensions)
+        self.assertIn("bore_diameter_mm", profile.construction_derivable_dimensions)
 
     def test_olet_body_requires_manufacturer_context(self):
         profile = find_profile("olet", "weldolet")
@@ -327,9 +334,7 @@ class TestOrchestration(unittest.TestCase):
         # Prompt 13 Sec.20 fix: reducer_concentric no longer requires
         # outside_diameter_mm at this profile stage (v1->v2 - resolved
         # per-end at the geometry-kernel layer instead), so this exact
-        # request now succeeds. A flange weld_neck request (ASME_B16.5,
-        # no bore data at all) still demonstrates a genuine
-        # DIMENSION_RESOLUTION-stage failure with both results preserved.
+        # request now succeeds.
         result = _prep(product_family="buttweld_fitting", subtype="reducer_concentric",
                         standard="ASME_B16.9", large_end_size="6", small_end_size="4")
         self.assertIsNone(result.failed_stage)
@@ -337,12 +342,32 @@ class TestOrchestration(unittest.TestCase):
         self.assertIsNotNone(result.dimension_resolution)
         self.assertEqual(result.dimension_resolution.status, ResolutionStatus.RESOLVED)
 
-        flange_result = _prep(product_family="flange", subtype="weld_neck", standard="ASME_B16.5",
-                               primary_size="2", pressure_class="150")
-        self.assertEqual(flange_result.failed_stage, OrchestrationStage.DIMENSION_RESOLUTION)
-        self.assertEqual(flange_result.identity_resolution.status, ResolutionStatus.RESOLVED)
-        self.assertIsNotNone(flange_result.dimension_resolution)
-        self.assertNotEqual(flange_result.dimension_resolution.status, ResolutionStatus.RESOLVED)
+        # Prompt 14 Sec.14-16 fix: a plain ASME_B16.5 flange weld_neck
+        # request is NO LONGER blocked at all (bore_diameter_mm is
+        # optional now, not required) - flange can no longer demonstrate
+        # a genuine DIMENSION_RESOLUTION-stage failure via its default
+        # required set (every required dimension resolves for all three
+        # standards now). The quarantined NPS8 elbow OD (unaffected by
+        # this prompt) still demonstrates a real DIMENSION_RESOLUTION-
+        # stage failure with both results preserved (identity RESOLVED,
+        # dimension_resolution QUARANTINED_ENGINEERING_DATA).
+        quarantine_result = _prep(product_family="buttweld_fitting", subtype="elbow_90_lr",
+                                   standard="ASME_B16.9", primary_size="8")
+        self.assertEqual(quarantine_result.failed_stage, OrchestrationStage.DIMENSION_RESOLUTION)
+        self.assertEqual(quarantine_result.identity_resolution.status, ResolutionStatus.RESOLVED)
+        self.assertIsNotNone(quarantine_result.dimension_resolution)
+        self.assertNotEqual(quarantine_result.dimension_resolution.status, ResolutionStatus.RESOLVED)
+
+    def test_asme_flange_weld_neck_now_ready_without_bore_context(self):
+        # Prompt 14 Sec.14-16: confirms the v1->v2 profile fix directly -
+        # a plain ASME_B16.5 flange weld_neck request (no bore context)
+        # now reaches GEOMETRY_READY at this profile-compilation stage;
+        # the actual bore geometry (or its absence) is a geometry-KERNEL-
+        # layer concern (Prompt 14), not a profile-compilation blocker.
+        result = _prep(product_family="flange", subtype="weld_neck", standard="ASME_B16.5",
+                        primary_size="2", pressure_class="150")
+        self.assertTrue(result.is_ready())
+        self.assertNotIn("bore_diameter_mm", result.geometry_specification.required_dimensions)
 
     def test_successful_orchestration_preserves_both_resolutions(self):
         result = _prep(product_family="pipe", standard="ASME_B36.10M", primary_size="6", schedule="Sch40")
@@ -383,12 +408,15 @@ class TestBatchSemantics(unittest.TestCase):
 
     def test_batch_mixed_preserves_order_and_isolates_failure(self):
         # Prompt 13 Sec.20 fix: reducer_concentric (NPS6x4) is now ready
-        # at this profile stage - flange weld_neck (ASME_B16.5, no bore
-        # data at all) demonstrates the genuine failure case instead.
+        # at this profile stage. Prompt 14 Sec.14-16 fix: plain ASME_B16.5
+        # flange weld_neck is ALSO now ready (bore is optional) - the
+        # genuine failure case in this batch is instead an explicit
+        # request for raised_face_diameter_mm on an EN_1092-1 flange
+        # (EN_1092-1 publishes no raised-face dimension at all).
         batch = prepare_geometry_specifications_batch([
             EngineeringRequest(product_family="pipe", standard="ASME_B36.10M", primary_size="6", schedule="Sch40"),
-            EngineeringRequest(product_family="flange", subtype="weld_neck", standard="ASME_B16.5",
-                                primary_size="2", pressure_class="150"),
+            EngineeringRequest(product_family="flange", subtype="weld_neck", standard="EN_1092-1",
+                                primary_size=50, pn="PN16", dimensions=["raised_face_diameter_mm"]),
             EngineeringRequest(product_family="buttweld_fitting", subtype="tee_equal",
                                 standard="ASME_B16.9", primary_size="4"),
         ], resolver=_RESOLVER)
@@ -398,8 +426,8 @@ class TestBatchSemantics(unittest.TestCase):
     def test_batch_none_ready(self):
         batch = prepare_geometry_specifications_batch([
             EngineeringRequest(product_family="pipe", standard="ASME_B36.10M"),
-            EngineeringRequest(product_family="flange", subtype="weld_neck", standard="ASME_B16.5",
-                                primary_size="2", pressure_class="150"),
+            EngineeringRequest(product_family="flange", subtype="weld_neck", standard="EN_1092-1",
+                                primary_size=50, pn="PN16", dimensions=["raised_face_diameter_mm"]),
         ], resolver=_RESOLVER)
         self.assertEqual(batch.batch_status, BatchStatus.NONE_READY)
 
@@ -487,13 +515,18 @@ class TestGeometryProfileCoverageMatrix(unittest.TestCase):
         for row in pipe_rows:
             self.assertEqual(row["geometry_readiness_status"], cov.PROFILE_READY)
 
-    def test_flange_weld_neck_asme_row_blocked_by_missing_bore(self):
+    def test_flange_weld_neck_row_is_profile_ready_after_prompt_14_fix(self):
+        # Prompt 14 Sec.14-16 fix (v1->v2): bore_diameter_mm is no longer
+        # a required dimension at the profile-coverage stage, so this row
+        # (which reflects required_dimensions only, not any per-standard
+        # request) is now PROFILE_READY - the coverage matrix here is
+        # standard-agnostic (Sec.23), so it reflects the profile's own
+        # required set, not any one standard's actual resolution outcome.
         rows = cov.geometry_profile_coverage_matrix(_READER)
         wn_rows = [r for r in rows if r["product_family"] == "flange" and r["subtype"] == "weld_neck"]
         self.assertEqual(len(wn_rows), 1)
         row = wn_rows[0]
-        self.assertIn("bore_diameter_mm", row["missing_required_dimensions"])
-        self.assertNotEqual(row["geometry_readiness_status"], cov.PROFILE_READY)
+        self.assertNotIn("bore_diameter_mm", row["missing_required_dimensions"])
 
     def test_olet_body_rows_flag_manufacturer_context(self):
         rows = cov.geometry_profile_coverage_matrix(_READER)
@@ -548,19 +581,40 @@ class TestRepresentativeScenarios(unittest.TestCase):
         self.assertEqual(r.geometry_specification.readiness_status, GeometryReadinessStatus.GEOMETRY_READY)
 
     def test_02_fully_specified_asme_b16_5_wn_flange(self):
+        # Prompt 14 Sec.14-16 fix (v1->v2): bore_diameter_mm is no longer
+        # a required dimension - a plain ASME_B16.5 weld_neck request (no
+        # bore explicitly requested) now reaches GEOMETRY_READY. The
+        # actual bore GEOMETRY for ASME_B16.5 is resolved separately, at
+        # the geometry-kernel layer, via FlangeBoreViaPipeScheduleRule
+        # (Prompt 14) - it is not part of profile-compilation readiness.
         r = _prep(product_family="flange", subtype="weld_neck", standard="ASME_B16.5",
                    primary_size="2", pressure_class="150")
-        # Sec.3 finding: bore_diameter_mm has no ASME_B16.5 authoritative fact.
+        self.assertEqual(r.geometry_specification.readiness_status, GeometryReadinessStatus.GEOMETRY_READY)
+
+    def test_02b_explicit_bore_request_still_unsupported_for_asme(self):
+        # bore_diameter_mm remains genuinely UNAVAILABLE as a DIRECT
+        # canonical fact for ASME_B16.5 - explicitly requesting it (rather
+        # than relying on the default required-set) still fails, proving
+        # the profile fix did not fabricate the missing data, only
+        # stopped requesting it implicitly by default.
+        r = _prep(product_family="flange", subtype="weld_neck", standard="ASME_B16.5",
+                   primary_size="2", pressure_class="150", dimensions=["bore_diameter_mm"])
         self.assertEqual(r.geometry_specification.readiness_status,
                           GeometryReadinessStatus.UNSUPPORTED_GEOMETRY_REQUEST)
-        self.assertIn("bore_diameter_mm", r.dimension_resolution.unsupported_reason)
+        self.assertEqual(r.identity_resolution.status, ResolutionStatus.UNSUPPORTED_REQUEST)
 
-    def test_03_flange_blocked_by_missing_authoritative_bore(self):
+    def test_03_flange_row_ready_asme_and_jis_both_resolve(self):
+        # Prompt 14 Sec.14-16 fix: the profile-coverage row no longer
+        # lists bore_diameter_mm as missing/required. Both ASME_B16.5 and
+        # JIS_B2220 now reach GEOMETRY_READY through the real
+        # orchestration path (JIS via its own direct authoritative bore
+        # fact, ASME with no bore requested at all at this stage).
         rows = cov.geometry_profile_coverage_matrix(_READER)
         wn_asme = [r for r in rows if r["product_family"] == "flange" and r["subtype"] == "weld_neck"][0]
-        self.assertIn("bore_diameter_mm", wn_asme["missing_required_dimensions"])
-        self.assertNotEqual(wn_asme["geometry_readiness_status"], cov.PROFILE_READY)
-        # JIS_B2220 (same subtype) IS ready, confirming the block is standard-specific.
+        self.assertNotIn("bore_diameter_mm", wn_asme["missing_required_dimensions"])
+        r_asme = _prep(product_family="flange", subtype="weld_neck", standard="ASME_B16.5",
+                        primary_size="2", pressure_class="150")
+        self.assertTrue(r_asme.is_ready())
         r_jis = _prep(product_family="flange", subtype="weld_neck", standard="JIS_B2220",
                        primary_size=50, jis_k="10K")
         self.assertTrue(r_jis.is_ready())
