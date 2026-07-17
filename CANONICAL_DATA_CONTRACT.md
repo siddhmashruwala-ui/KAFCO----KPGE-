@@ -1631,3 +1631,119 @@ product_family="flange", standard="ASME_B16.5")` now returns `subtypes:
 `geometry_profile_available: true`. The CRM Part Configurator's flange
 subtype dropdown will reflect all six subtypes automatically on next
 server restart - no CRM-side code changes were needed or made.
+
+---
+
+## Prompt 42 addendum: Weld-Neck / Long-Weld-Neck hub geometry (3D hub modeling)
+
+**Directive:** "can we see dimensions of long weldneck flanges as well?"
+- clarified via AskUserQuestion to the most substantial of three options:
+"Also model the actual 3D hub shape" (not just a queryable number, not
+just a text answer).
+
+**Sourcing:** ASME B16.5 hub base diameter ("X") and standard weld-neck
+hub length ("Y") sourced from Texas Flange (primary), cross-verified
+against pipingpipeline.com (independently-labeled secondary) across all
+7 pressure classes / up to 20 NPS each - 0 mismatches on 5 spot-checked
+(class, NPS) pairs. Long Weld Neck confirmed via 5 independent sources as
+NOT a separately-tabulated ASME B16.5 table - a standard weld-neck flange
+with IDENTICAL OD/thickness/bolt-circle/bolt-hole/hub-base-diameter,
+differing ONLY in `length_through_hub_mm`, fixed at 229mm (9in) for
+NPS<=4 and 305mm (12in) for NPS>4, independent of pressure class.
+
+**Disclosed source conflict:** both wermac.org and the CRM's own
+pre-existing legacy `HUB_DIM` JS table report Y values ~1.5mm (~0.06in)
+higher than Texas Flange/pipingpipeline.com for the same NPS/class -
+diagnosed as a raised-face-height-inclusion measurement-convention
+difference (matches ASME B16.5's own ~1.6mm RF height for Class 150-600).
+Resolved in favor of Texas Flange/pipingpipeline (two independently-
+labeled, mutually-agreeing sources) over the CRM's single legacy table -
+documented transparently in `_ingest_hub_dimensions.py`'s module
+docstring, the adapter's verification notes, and `vocabulary.py`'s
+`LEGACY_FIELD_MAP` entries, never silently picked without disclosure.
+
+**Data layer:** new `_ingest_hub_dimensions.py` (permanent provenance
+record, same pattern as `_ingest_new_flange_types.py`) merges three new
+fields into every one of the 132 `ASME_B16.5_Flanges.json` rows:
+`HubBaseDiameter_mm`, `LengthThroughHub_WeldNeck_mm`,
+`LengthThroughHub_LongWeldNeck_mm` (229.0/305.0 by NPS, independent of
+class). `asme_b16_5_flanges.py`'s new `_HUB_FIELD_SPECS` emits
+`hub_base_diameter_mm` (flange_type=None, shared) and
+`length_through_hub_mm` (flange_type=weld_neck /
+flange_type=long_weld_neck, distinct facts). A new
+`_LONG_WELD_NECK_SHARED_THICKNESS_SPEC` re-tags the SAME
+`Thickness_WeldNeck_mm` source value as a `flange_type=long_weld_neck`
+duplicate fact under `DIM_FLANGE_THICKNESS_WELD_NECK` (never
+re-derived) - the same sharing mechanism already proven for the four
+Prompt 41 subtypes' `TJ`/`T` thickness convergence. Net effect: +528
+facts (4 unconditional new facts x 132 rows), built total 5788->6316,
+stored total 5358->5886, all `VERIFIED_AUTHORITATIVE` (no new
+conflicts/quarantine). Data-layer fingerprint shifted to
+`9301f07c27b8d7bb864fbc56a7999e13e241e40809ddf26d9a0c4981658d261b`.
+
+**Geometry profiles:** `PROFILE_FLANGE_WELD_NECK` bumped v2->v3,
+`hub_base_diameter_mm`/`length_through_hub_mm` added to
+`optional_dimensions` (+ `construction_derivable_dimensions`, matching
+`bore_diameter_mm`'s own dual listing). New `PROFILE_FLANGE_LONG_WELD_NECK`
+(v1) - its own `long_weld_neck` subtype/profile identity, NOT a reuse of
+`weld_neck` - with `length_through_hub_mm` REQUIRED (the one dimension
+that defines LWN's identity) and `hub_base_diameter_mm` merely optional
+(shared with weld_neck). New resolver aliases: LWN, LONG WELD NECK,
+STRAIGHT HUB, etc. Per the orchestration layer's existing "optional dims
+resolved only when explicitly requested via `dimensions=[...]`" rule
+(never auto-included), callers must explicitly request
+`hub_base_diameter_mm`/`length_through_hub_mm` to get hub geometry for
+weld_neck; for long_weld_neck, `length_through_hub_mm` resolves
+automatically (required), but `hub_base_diameter_mm` still needs an
+explicit request to actually build the hub mesh (both must resolve for
+geometry to be produced - the flat-plate-only body is still generated,
+never blocked, whenever either is missing).
+
+**Geometry construction:** the hub is modeled as a STRAIGHT (non-tapered)
+cylinder at `hub_base_diameter_mm` for `length_through_hub_mm`, stacked
+onto the flat-plate body along +Z via two new builder functions
+(`build_hollow_cylinder_with_hub` / `build_solid_cylinder_with_hub`,
+`builders.py`) that reuse the existing `_merge_meshes` deterministic
+multi-feature composition helper (already proven for tee/cross/two-arm
+bodies) - an "honest overlap," never a boolean union. This is a
+deliberate documented simplification, NOT a fabricated dimension: no
+source consistently publishes a far-end/point-of-welding diameter with
+the same rigor as X and Y, so the true ASME B16.5 taper toward the pipe
+OD is not modeled. Two new `TopologyRepresentation` constants:
+`HOLLOW_ANNULAR_BODY_WITH_HUB_COMPOSITE_NO_BOOLEAN_CUT` and
+`SOLID_EXTERNAL_ENVELOPE_WITH_HUB_COMPOSITE_NO_BOOLEAN_CUT`. Hub
+resolution is restricted to `_HUB_ELIGIBLE_SUBTYPES = {weld_neck,
+long_weld_neck}` - every other subtype (slip_on, threaded, socket_weld,
+lap_joint, blind, and JIS_B2220/EN_1092-1 weld_neck) always reports
+`hub.status = NOT_APPLICABLE_SUBTYPE` or
+`UNAVAILABLE_NO_AUTHORITATIVE_DIMENSIONS`, never a fabricated hub.
+
+**Tests:** `TestFlangeCanonicalCoverageInspection`'s hub-absence
+assertions flipped to reflect ASME_B16.5 now having hub facts (JIS_B2220/
+EN_1092-1 confirmed still zero). `TestFlangeSubtypeSupportMatrix` gained
+`long_weld_neck` to its expected ASME_B16.5 `flange_type` set.
+`TestRaisedFaceAndHubAndFaceType`'s hub-always-unavailable test split
+into "unavailable when not requested" (renamed, corrected status string)
+and a new "modeled for ASME weld_neck when requested" positive test
+(including confirmation that JIS_B2220/EN_1092-1 correctly fail closed at
+the identity-resolution stage when hub dims are explicitly requested for
+a standard with zero hub facts - verified live via a debug probe before
+asserting, not assumed). New `TestLongWeldNeckAndHubGeometry` class:
+dispatch registration, profile definition, 229mm (NPS<=4) and 305mm
+(NPS>4) end-to-end generation, thickness-sharing confirmation against
+weld_neck at the geometry-output level, JIS/EN weld_neck non-regression,
+confirmation the other five Prompt 41 subtypes never attempt hub
+resolution, and the solid (no-bore) hub-composite branch.
+`test_asme_b16_5_ingestion.py` and `test_prompt9_data_layer_closure.py`
+fixture constants (record-count formula, per-adapter counts, built/
+stored/authoritative totals, weld-neck-thickness distinctness query)
+updated to the new baseline. **Full regression: 767 total tests pass**
+(758 Prompt 41 baseline + 9 net new this prompt).
+
+**Live CRM verification:** `kgpe_bridge.py` requires ZERO changes (same
+"computed live from KGPE" guarantee as every prior prompt) -
+`progressive_discovery(reader, product_family="flange",
+standard="ASME_B16.5")` now returns `long_weld_neck` in its subtypes
+list automatically, and hub dimensions surface through the existing
+geometry-payload measurements/features path with no bridge-side
+awareness of hub geometry required.

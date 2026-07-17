@@ -63,6 +63,7 @@ _PRODUCT_DISPATCH = {
     "buttweld_cap": cap_product,
     "buttweld_reducer": reducer_product,
     "flange_weld_neck": flange_product,
+    "flange_long_weld_neck": flange_product,
     "flange_slip_on": flange_product,
     "flange_threaded": flange_product,
     "flange_socket_weld": flange_product,

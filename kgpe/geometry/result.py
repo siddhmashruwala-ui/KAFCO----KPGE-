@@ -65,6 +65,20 @@ class TopologyRepresentation:
     # contour (see OletReinforcementEnvelopeConstructionRule).
     CONSTRUCTION_DERIVED_ENVELOPE_WITH_INTERFACE_METADATA_NO_BOOLEAN_CUT = \
         "CONSTRUCTION_DERIVED_ENVELOPE_WITH_INTERFACE_METADATA_NO_BOOLEAN_CUT"
+    # Prompt 42: a weld-neck/long-weld-neck flange body WITH a modeled hub
+    # (kgpe.geometry.builders.build_hollow_cylinder_with_hub /
+    # build_solid_cylinder_with_hub) - two coaxially-stacked cylindrical
+    # solids (flat body + straight-cylinder hub, see products/flange.py's
+    # module docstring for the taper simplification) touching at one
+    # shared interface plane, never boolean-fused. Distinguished from the
+    # plain (no-hub) HOLLOW_ANNULAR_BODY_.../SOLID_EXTERNAL_ENVELOPE_...
+    # variants above, which remain the correct classification whenever
+    # hub facts are unavailable (JIS_B2220, EN_1092-1, all five Prompt 41
+    # non-weld-neck-family subtypes).
+    HOLLOW_ANNULAR_BODY_WITH_HUB_COMPOSITE_NO_BOOLEAN_CUT = \
+        "HOLLOW_ANNULAR_BODY_WITH_HUB_COMPOSITE_NO_BOOLEAN_CUT"
+    SOLID_EXTERNAL_ENVELOPE_WITH_HUB_COMPOSITE_NO_BOOLEAN_CUT = \
+        "SOLID_EXTERNAL_ENVELOPE_WITH_HUB_COMPOSITE_NO_BOOLEAN_CUT"
 
 
 ALL_TOPOLOGY_REPRESENTATIONS = frozenset({
@@ -76,6 +90,8 @@ ALL_TOPOLOGY_REPRESENTATIONS = frozenset({
     TopologyRepresentation.SOLID_EXTERNAL_ENVELOPE_WITH_SOCKET_METADATA_NO_BOOLEAN_CUT,
     TopologyRepresentation.MULTI_FEATURE_MESH_WITH_SOCKET_METADATA_NO_BOOLEAN_CUT,
     TopologyRepresentation.CONSTRUCTION_DERIVED_ENVELOPE_WITH_INTERFACE_METADATA_NO_BOOLEAN_CUT,
+    TopologyRepresentation.HOLLOW_ANNULAR_BODY_WITH_HUB_COMPOSITE_NO_BOOLEAN_CUT,
+    TopologyRepresentation.SOLID_EXTERNAL_ENVELOPE_WITH_HUB_COMPOSITE_NO_BOOLEAN_CUT,
 })
 
 

@@ -42,9 +42,15 @@ _REGISTRY, _COUNTS = build_canonical_registry()
 # Socket-Weld/Lap-Joint/Blind thickness facts (all VERIFIED_AUTHORITATIVE,
 # no conflicts/quarantine - manufacturer-specific and quarantined totals
 # are unaffected).
-EXPECTED_BUILT_TOTAL = 5788
-EXPECTED_STORED_TOTAL = 5358
-EXPECTED_AUTHORITATIVE = 5197
+# Prompt 42: baseline shifted again by 528 new ASME B16.5 hub/long_weld_
+# neck facts (4 unconditional new facts x 132 source rows - see
+# test_asme_b16_5_ingestion.py's test_record_count_is_six_base_plus_
+# optional_type_facts_per_source_row for the per-row breakdown) - all
+# VERIFIED_AUTHORITATIVE, no conflicts/quarantine, manufacturer-specific
+# and quarantined totals again unaffected.
+EXPECTED_BUILT_TOTAL = 6316
+EXPECTED_STORED_TOTAL = 5886
+EXPECTED_AUTHORITATIVE = 5725
 EXPECTED_MANUFACTURER_SPECIFIC = 145
 EXPECTED_QUARANTINED_FACTS = 16
 EXPECTED_QUARANTINED_GROUPS = 8
@@ -73,7 +79,8 @@ class TestRegistryBaselineVerification(unittest.TestCase):
 
     def test_per_adapter_counts_match_prompt8(self):
         expected = {
-            "ASME_B16.5_flanges": 1326, "ASME_B36_pipes": 409, "ASME_B16.9_buttweld": 864,
+            # Prompt 42: ASME_B16.5_flanges shifted 1326 -> 1854 (+528, hub/long_weld_neck facts).
+            "ASME_B16.5_flanges": 1854, "ASME_B36_pipes": 409, "ASME_B16.9_buttweld": 864,
             "ASME_B16.11_socketweld": 750, "MSS_SP97_olets": 223, "JIS_B2220_flanges": 640,
             "JIS_pipes": 261, "JIS_buttweld": 149, "EN_1092-1_flanges": 792,
             "EN_pipes": 104, "EN_buttweld": 270,
@@ -451,7 +458,15 @@ class TestPrompt3ConsistencyMatrix(unittest.TestCase):
     def test_weld_neck_thickness_kept_distinct_from_other_types(self):
         from kgpe.contract import vocabulary as VOC
         self.assertNotEqual(VOC.DIM_FLANGE_THICKNESS_WELD_NECK, VOC.DIM_FLANGE_THICKNESS_OTHER_TYPES)
-        wn = _REGISTRY.query(VOC.DIM_FLANGE_THICKNESS_WELD_NECK, standard="ASME_B16.5", nps="2", class_key="150")
+        # Prompt 42: DIM_FLANGE_THICKNESS_WELD_NECK now carries facts for
+        # both flange_type="weld_neck" AND flange_type="long_weld_neck"
+        # (a re-tagged duplicate of the same source value, per ASME
+        # B16.5's own "LWN shares weld_neck's T" rule - see
+        # test_asme_b16_5_ingestion.TestWeldNeckApplicability) - scope
+        # explicitly to weld_neck to preserve this test's original intent
+        # (exactly one weld_neck thickness fact per NPS/class).
+        wn = _REGISTRY.query(VOC.DIM_FLANGE_THICKNESS_WELD_NECK, standard="ASME_B16.5", nps="2",
+                              class_key="150", flange_type="weld_neck")
         self.assertEqual(len(wn), 1)
 
     def test_b16_9_reducer_concentric_and_eccentric_both_present(self):

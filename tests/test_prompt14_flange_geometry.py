@@ -14,6 +14,7 @@ from kgpe.contract.snapshot import registry_fingerprint
 from kgpe.resolver import EngineeringRequest, EngineeringResolver, ResolutionStatus
 from kgpe.geometry_spec import prepare_geometry_specification, find_profile, GeometryReadinessStatus
 from kgpe.geometry_spec import coverage as cov
+from kgpe.geometry_spec.orchestration import OrchestrationStage
 
 import kgpe.geometry as geo
 from kgpe.geometry.cross_family import FlangeBoreViaPipeScheduleRule
@@ -32,7 +33,7 @@ from kgpe.geometry.products import flange
 _READER, _ = build_canonical_reader()
 _FINGERPRINT = registry_fingerprint(_READER.registry)
 _RESOLVER = EngineeringResolver(_READER, _FINGERPRINT)
-_DATA_LAYER_FINGERPRINT = "3a9d18b5df1ee0349c36beae510f5d10e38cba966bbb1c5ed6264df52c5ef896"  # Prompt 41: shifted by new ASME B16.5 Slip-On/Threaded/Socket-Weld/Lap-Joint/Blind facts
+_DATA_LAYER_FINGERPRINT = "9301f07c27b8d7bb864fbc56a7999e13e241e40809ddf26d9a0c4981658d261b"  # Prompt 42: shifted by new ASME B16.5 hub/long_weld_neck facts
 
 
 def _prep(**kwargs):
@@ -75,8 +76,13 @@ class TestFlangeCanonicalCoverageInspection(unittest.TestCase):
         self.assertNotIn("bore_diameter_mm", dims)
         self.assertNotIn("raised_face_diameter_mm", dims)
         self.assertNotIn("raised_face_height_mm", dims)
-        self.assertNotIn("hub_base_diameter_mm", dims)
-        self.assertNotIn("length_through_hub_mm", dims)
+        # Prompt 42: hub_base_diameter_mm/length_through_hub_mm are NOW
+        # available for ASME_B16.5 (weld_neck/long_weld_neck only, via
+        # _HUB_FIELD_SPECS) - the ONLY standard with any hub facts at all
+        # (see test_hub_dimensions_absent_for_every_standard below, which
+        # confirms JIS_B2220/EN_1092-1 remain unaffected).
+        self.assertIn("hub_base_diameter_mm", dims)
+        self.assertIn("length_through_hub_mm", dims)
 
     def test_jis_b2220_available_dimensions(self):
         dims = _READER.available_dimensions(product_family="flange", standard="JIS_B2220",
@@ -108,13 +114,19 @@ class TestFlangeCanonicalCoverageInspection(unittest.TestCase):
             dims = _READER.available_dimensions(product_family="flange", standard=standard)
             self.assertNotIn("raised_face_height_mm", dims)
 
-    def test_hub_dimensions_absent_for_every_standard(self):
-        # Sec.21-22: zero production facts for hub_base_diameter_mm/
-        # length_through_hub_mm at ANY standard.
-        for standard in ("ASME_B16.5", "JIS_B2220", "EN_1092-1"):
+    def test_hub_dimensions_absent_for_every_standard_except_asme(self):
+        # Sec.21-22 (pre-Prompt-42): zero production facts for
+        # hub_base_diameter_mm/length_through_hub_mm at ANY standard.
+        # Prompt 42: ASME_B16.5 is now the sole exception (weld_neck/
+        # long_weld_neck only, via _HUB_FIELD_SPECS) - JIS_B2220/EN_1092-1
+        # remain exactly as before, zero hub facts, never fabricated.
+        for standard in ("JIS_B2220", "EN_1092-1"):
             dims = _READER.available_dimensions(product_family="flange", standard=standard)
             self.assertNotIn("hub_base_diameter_mm", dims)
             self.assertNotIn("length_through_hub_mm", dims)
+        dims = _READER.available_dimensions(product_family="flange", standard="ASME_B16.5")
+        self.assertIn("hub_base_diameter_mm", dims)
+        self.assertIn("length_through_hub_mm", dims)
 
 
 class TestFlangeSubtypeSupportMatrix(unittest.TestCase):
@@ -167,14 +179,17 @@ class TestFlangeSubtypeSupportMatrix(unittest.TestCase):
         # Lap-Joint/Blind thickness facts now exist there, AND (unlike the
         # original Prompt 41 landing) geometry profiles now wire all six
         # up too - see test_all_six_prompt41_subtypes_have_defined_profiles
-        # above.
+        # above. Prompt 42 adds a SEVENTH ASME_B16.5 flange_type,
+        # long_weld_neck - its own subtype/profile identity (not a
+        # re-use of weld_neck), carrying a re-tagged duplicate thickness
+        # fact plus its own fixed 229/305mm length_through_hub_mm fact.
         for standard in ("JIS_B2220", "EN_1092-1"):
             types = _READER.discover("flange_type", product_family="flange", standard=standard)
             self.assertTrue(set(types) <= {"weld_neck"})
         asme_types = _READER.discover("flange_type", product_family="flange", standard="ASME_B16.5")
         self.assertEqual(
             set(asme_types),
-            {"weld_neck", "slip_on", "threaded", "socket_weld", "lap_joint", "blind"},
+            {"weld_neck", "long_weld_neck", "slip_on", "threaded", "socket_weld", "lap_joint", "blind"},
         )
 
 
@@ -448,14 +463,61 @@ class TestRaisedFaceAndHubAndFaceType(unittest.TestCase):
             rf = next(f for f in result.geometry_payload["features"] if f["name"] == "raised_face")
             self.assertEqual(rf["params"]["status"], "UNAVAILABLE_NO_AUTHORITATIVE_DIMENSIONS")
 
-    def test_hub_always_unavailable(self):
+    def test_hub_unavailable_when_not_explicitly_requested(self):
+        # Prompt 42: hub_base_diameter_mm/length_through_hub_mm are
+        # optional dimensions (Sec.7's orchestration rule: optional dims
+        # are resolved ONLY when the caller explicitly asks for them via
+        # `dimensions=[...]`, never auto-included) - _flange_spec here
+        # passes no extra_dims, so hub geometry is correctly UNAVAILABLE
+        # for all three standards, even ASME_B16.5 (which DOES have hub
+        # facts - see test_hub_modeled_for_asme_weld_neck_when_requested
+        # below for the positive case). This is no longer "unavailable
+        # for any standard" (that claim is now false) - it is
+        # "unavailable because not requested".
         for standard, size, rating in (("ASME_B16.5", "2", {"pressure_class": "150"}),
                                         ("JIS_B2220", 50, {"jis_k": "10K"}),
                                         ("EN_1092-1", 50, {"pn": "PN16"})):
             spec = _flange_spec(standard, size, **rating)
             result = generate_geometry(spec)
             hub = next(f for f in result.geometry_payload["features"] if f["name"] == "hub")
-            self.assertEqual(hub["params"]["status"], "UNAVAILABLE_NO_AUTHORITATIVE_DIMENSIONS_ANY_STANDARD")
+            self.assertEqual(hub["params"]["status"], "UNAVAILABLE_NO_AUTHORITATIVE_DIMENSIONS")
+
+    def test_hub_modeled_for_asme_weld_neck_when_requested(self):
+        # Prompt 42: when hub dims ARE explicitly requested, ASME_B16.5
+        # weld_neck resolves and models a real straight-cylinder hub
+        # composite - JIS_B2220/EN_1092-1 still have zero hub facts even
+        # when requested (never fabricated).
+        spec = _flange_spec("ASME_B16.5", "1", pressure_class="150",
+                             extra_dims=["hub_base_diameter_mm", "length_through_hub_mm"])
+        bore_value = _asme_bore("1")
+        result = generate_geometry(spec, product_kwargs={"bore_value": bore_value})
+        self.assertTrue(result.is_generated())
+        self.assertEqual(result.topology_representation,
+                          TopologyRepresentation.HOLLOW_ANNULAR_BODY_WITH_HUB_COMPOSITE_NO_BOOLEAN_CUT)
+        hub = next(f for f in result.geometry_payload["features"] if f["name"] == "hub")
+        self.assertEqual(hub["params"]["status"], "MODELED_STRAIGHT_CYLINDER_SIMPLIFICATION")
+        self.assertAlmostEqual(hub["params"]["hub_base_diameter_mm"], 49.28, places=2)
+        self.assertAlmostEqual(hub["params"]["length_through_hub_mm"], 53.85, places=2)
+        m = result.geometry_payload["measurements"]
+        self.assertAlmostEqual(m["hub_base_diameter_mm"], 49.28, places=1)
+        self.assertAlmostEqual(m["length_through_hub_mm"], 53.85, places=1)
+
+        for standard, size, rating in (("JIS_B2220", 50, {"jis_k": "10K"}), ("EN_1092-1", 50, {"pn": "PN16"})):
+            r = _prep(product_family="flange", subtype="weld_neck", standard=standard, primary_size=size,
+                       dimensions=["hub_base_diameter_mm", "length_through_hub_mm"], **rating)
+            # Unlike the compiler's own defensive re-check (which only
+            # fails closed on REQUIRED dims, Sec.13 step 6), the
+            # orchestration layer's identity-resolution stage resolves
+            # the request's `dimensions` list AS GIVEN, before any
+            # profile/required-vs-optional distinction exists yet
+            # (prepare_geometry_specification's stage 1) - an explicitly
+            # requested dimension with zero facts for this standard makes
+            # THAT resolver call itself UNSUPPORTED_REQUEST, so the whole
+            # preparation fails closed rather than silently dropping the
+            # unavailable optional dim. Confirmed live (not assumed) via
+            # a debug probe before writing this assertion.
+            self.assertFalse(r.is_ready())
+            self.assertEqual(r.failed_stage, OrchestrationStage.ENGINEERING_RESOLUTION)
 
     def test_face_type_never_silently_assumed_rf(self):
         spec = _flange_spec("JIS_B2220", 50, extra_dims=["raised_face_diameter_mm"], jis_k="10K")
@@ -773,11 +835,18 @@ class TestRepresentativeScenarios(unittest.TestCase):
         rf = next(f for f in r.geometry_payload["features"] if f["name"] == "raised_face")
         self.assertEqual(rf["params"]["status"], "UNAVAILABLE_NO_AUTHORITATIVE_DIMENSIONS")
 
-    def test_15_asme_hub_unavailable_structured(self):
+    def test_15_asme_hub_unavailable_when_not_requested_structured(self):
+        # Prompt 42: hub dims exist for ASME_B16.5 but are optional and
+        # only resolved when explicitly requested (see
+        # TestRaisedFaceAndHubAndFaceType.test_hub_modeled_for_asme_weld_
+        # neck_when_requested for the positive case) - this default
+        # _flange_spec() call requests no extra_dims, so hub stays
+        # unavailable here exactly as every other structured scenario in
+        # this class does.
         spec = _flange_spec("ASME_B16.5", "2", pressure_class="150")
         r = generate_geometry(spec)
         hub = next(f for f in r.geometry_payload["features"] if f["name"] == "hub")
-        self.assertEqual(hub["params"]["status"], "UNAVAILABLE_NO_AUTHORITATIVE_DIMENSIONS_ANY_STANDARD")
+        self.assertEqual(hub["params"]["status"], "UNAVAILABLE_NO_AUTHORITATIVE_DIMENSIONS")
 
     # --- JIS B2220 (16-24) ---
     def test_16_jis_flange_body_generation(self):
@@ -959,6 +1028,118 @@ class TestPrompt41NewFlangeSubtypeGeometry(unittest.TestCase):
                             "flange_lap_joint", "flange_blind"):
             self.assertIn(profile_id, _PRODUCT_DISPATCH)
             self.assertIs(_PRODUCT_DISPATCH[profile_id], flange)
+
+
+class TestLongWeldNeckAndHubGeometry(unittest.TestCase):
+    """Prompt 42: long_weld_neck as its own flange_type/subtype/profile
+    identity, and the hub composite mesh shared by weld_neck/
+    long_weld_neck. long_weld_neck's length_through_hub_mm is REQUIRED
+    (not merely optional, unlike weld_neck) - see PROFILE_FLANGE_LONG_
+    WELD_NECK's own notes - so it is always requested implicitly via
+    profile.required_dimensions, never via extra_dims."""
+
+    def test_long_weld_neck_dispatches_via_kernel_product_dispatch(self):
+        from kgpe.geometry.kernel import _PRODUCT_DISPATCH
+        self.assertIn("flange_long_weld_neck", _PRODUCT_DISPATCH)
+        self.assertIs(_PRODUCT_DISPATCH["flange_long_weld_neck"], flange)
+
+    def test_long_weld_neck_profile_is_defined(self):
+        profile = find_profile("flange", "long_weld_neck")
+        self.assertIsNotNone(profile)
+        self.assertEqual(profile.profile_id, "flange_long_weld_neck")
+        self.assertIn("length_through_hub_mm", profile.required_dimensions)
+        self.assertIn("hub_base_diameter_mm", profile.optional_dimensions)
+
+    def test_long_weld_neck_nps_le_4_gets_229mm(self):
+        # ASME B16.5's own LWN rule: 229mm (9in) for NPS<=4, independent
+        # of pressure class. hub_base_diameter_mm is merely OPTIONAL for
+        # long_weld_neck (shared with weld_neck), so it must be
+        # explicitly requested via extra_dims for the hub mesh to
+        # actually build - length_through_hub_mm needs no such request
+        # since it is REQUIRED for this profile.
+        spec = _flange_spec("ASME_B16.5", "1", pressure_class="150", subtype="long_weld_neck",
+                             extra_dims=["hub_base_diameter_mm"])
+        bore_value = _asme_bore("1")
+        result = generate_geometry(spec, product_kwargs={"bore_value": bore_value})
+        self.assertTrue(result.is_generated(), result.generation_trace)
+        self.assertEqual(result.topology_representation,
+                          TopologyRepresentation.HOLLOW_ANNULAR_BODY_WITH_HUB_COMPOSITE_NO_BOOLEAN_CUT)
+        hub = next(f for f in result.geometry_payload["features"] if f["name"] == "hub")
+        self.assertEqual(hub["params"]["status"], "MODELED_STRAIGHT_CYLINDER_SIMPLIFICATION")
+        self.assertAlmostEqual(hub["params"]["length_through_hub_mm"], 229.0, places=2)
+        m = result.geometry_payload["measurements"]
+        self.assertAlmostEqual(m["length_through_hub_mm"], 229.0, places=1)
+
+    def test_long_weld_neck_nps_gt_4_gets_305mm(self):
+        # ASME B16.5's own LWN rule: 305mm (12in) for NPS>4.
+        spec = _flange_spec("ASME_B16.5", "6", pressure_class="300", subtype="long_weld_neck",
+                             extra_dims=["hub_base_diameter_mm"])
+        bore_value = _asme_bore("6")
+        result = generate_geometry(spec, product_kwargs={"bore_value": bore_value})
+        self.assertTrue(result.is_generated(), result.generation_trace)
+        hub = next(f for f in result.geometry_payload["features"] if f["name"] == "hub")
+        self.assertAlmostEqual(hub["params"]["length_through_hub_mm"], 305.0, places=2)
+        m = result.geometry_payload["measurements"]
+        self.assertAlmostEqual(m["length_through_hub_mm"], 305.0, places=1)
+
+    def test_long_weld_neck_thickness_matches_weld_neck_same_size_class(self):
+        # Prompt 42: long_weld_neck's thickness is a re-tagged duplicate
+        # of weld_neck's own T value (never independently derived) -
+        # confirmed here at the geometry-output level, not just the
+        # fact-ingestion level (test_asme_b16_5_ingestion.py covers that).
+        wn_spec = _flange_spec("ASME_B16.5", "2", pressure_class="150", subtype="weld_neck")
+        lwn_spec = _flange_spec("ASME_B16.5", "2", pressure_class="150", subtype="long_weld_neck")
+        wn_result = generate_geometry(wn_spec, product_kwargs={"bore_value": _asme_bore("2")})
+        lwn_result = generate_geometry(lwn_spec, product_kwargs={"bore_value": _asme_bore("2")})
+        self.assertEqual(
+            wn_result.geometry_payload["measurements"]["flange_thickness_weld_neck_mm"],
+            lwn_result.geometry_payload["measurements"]["flange_thickness_weld_neck_mm"],
+        )
+
+    def test_jis_and_en_weld_neck_unaffected_by_hub_composite_work(self):
+        # Sec.28-style non-regression check: JIS_B2220/EN_1092-1 weld_neck
+        # geometry (no hub facts for either standard) must still generate
+        # exactly as it did before Prompt 42 - flat-plate body only, the
+        # PRE-Prompt-42 topology constants, never a hub composite.
+        jis_spec = _flange_spec("JIS_B2220", 50, extra_dims=["bore_diameter_mm"], jis_k="10K")
+        jis_result = generate_geometry(jis_spec)
+        self.assertTrue(jis_result.is_generated())
+        self.assertEqual(jis_result.topology_representation,
+                          TopologyRepresentation.HOLLOW_ANNULAR_BODY_WITH_BOLT_HOLE_METADATA_NO_BOOLEAN_CUT)
+        en_spec = _flange_spec("EN_1092-1", 50, pn="PN16")
+        en_result = generate_geometry(en_spec)
+        self.assertTrue(en_result.is_generated())
+        self.assertEqual(en_result.topology_representation,
+                          TopologyRepresentation.SOLID_EXTERNAL_ENVELOPE_WITH_BOLT_HOLE_METADATA_NO_BOOLEAN_CUT)
+
+    def test_other_five_prompt41_subtypes_never_attempt_hub(self):
+        # _HUB_ELIGIBLE_SUBTYPES restricts hub resolution to weld_neck/
+        # long_weld_neck only - slip_on/threaded/socket_weld/lap_joint/
+        # blind must always report NOT_APPLICABLE_SUBTYPE, even though
+        # slip_on/threaded/socket_weld/lap_joint DO have a through-bore.
+        for subtype in ("slip_on", "threaded", "socket_weld", "lap_joint", "blind"):
+            spec = _flange_spec("ASME_B16.5", "2", pressure_class="150", subtype=subtype)
+            result = generate_geometry(spec)
+            self.assertTrue(result.is_generated(), (subtype, result.generation_trace))
+            hub = next(f for f in result.geometry_payload["features"] if f["name"] == "hub")
+            self.assertEqual(hub["params"]["status"], "NOT_APPLICABLE_SUBTYPE")
+
+    def test_solid_hub_composite_topology_when_no_bore_resolved(self):
+        # Prompt 42's fourth mesh-building branch: hub present, bore
+        # absent - SOLID_EXTERNAL_ENVELOPE_WITH_HUB_COMPOSITE_NO_BOOLEAN_
+        # CUT (build_solid_cylinder_with_hub). Constructed directly via
+        # prepare_geometry_specification with no bore_value supplied,
+        # since ASME_B16.5 weld_neck normally has a bore available via
+        # FlangeBoreViaPipeScheduleRule - this test deliberately omits it
+        # to exercise the no-bore branch.
+        spec = _flange_spec("ASME_B16.5", "1", pressure_class="150", subtype="weld_neck",
+                             extra_dims=["hub_base_diameter_mm", "length_through_hub_mm"])
+        result = generate_geometry(spec)  # no product_kwargs -> no bore_value
+        self.assertTrue(result.is_generated(), result.generation_trace)
+        self.assertEqual(result.topology_representation,
+                          TopologyRepresentation.SOLID_EXTERNAL_ENVELOPE_WITH_HUB_COMPOSITE_NO_BOOLEAN_CUT)
+        hub = next(f for f in result.geometry_payload["features"] if f["name"] == "hub")
+        self.assertEqual(hub["params"]["status"], "MODELED_STRAIGHT_CYLINDER_SIMPLIFICATION")
 
 
 if __name__ == "__main__":

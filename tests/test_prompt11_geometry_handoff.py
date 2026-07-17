@@ -216,12 +216,18 @@ class TestGeometryProfileRegistry(unittest.TestCase):
         # required_dimensions (it made GEOMETRY_READY structurally
         # unreachable for ASME_B16.5/EN_1092-1) into optional_dimensions +
         # construction_derivable_dimensions - see profile.py's own note.
+        # Prompt 42 (v2->v3): hub_base_diameter_mm/length_through_hub_mm
+        # added to optional_dimensions + construction_derivable_dimensions
+        # alongside bore_diameter_mm, now directly resolvable for
+        # ASME_B16.5.
         profile = find_profile("flange", "weld_neck")
         self.assertEqual(profile.profile_id, "flange_weld_neck")
-        self.assertEqual(profile.version, "2")
+        self.assertEqual(profile.version, "3")
         self.assertNotIn("bore_diameter_mm", profile.required_dimensions)
         self.assertIn("bore_diameter_mm", profile.optional_dimensions)
         self.assertIn("bore_diameter_mm", profile.construction_derivable_dimensions)
+        self.assertIn("hub_base_diameter_mm", profile.optional_dimensions)
+        self.assertIn("length_through_hub_mm", profile.optional_dimensions)
 
     def test_olet_body_requires_manufacturer_context(self):
         profile = find_profile("olet", "weldolet")

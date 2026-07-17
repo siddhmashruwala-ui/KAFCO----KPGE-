@@ -345,8 +345,24 @@ LEGACY_FIELD_MAP = {
     },
     DIM_BOLT_CIRCLE_DIAMETER: {"python_dimension_library": "BoltCircle_mm", "js_crm": "FLG[cls][nps][2]*25.4"},
     DIM_BOLT_HOLE_DIAMETER: {"python_dimension_library": "BoltHoleDia_mm", "js_crm": "BOLT_HOLE[cls][nps]*25.4"},
-    DIM_HUB_BASE_DIAMETER: {"python_dimension_library": None, "js_crm": "HUB_DIM[cls][nps][0]*25.4"},
-    DIM_LENGTH_THROUGH_HUB: {"python_dimension_library": None, "js_crm": "HUB_DIM[cls][nps][1]*25.4"},
+    DIM_HUB_BASE_DIAMETER: {
+        "python_dimension_library": "HubBaseDiameter_mm (Prompt 42) - shared by weld_neck and "
+                                     "long_weld_neck (identical per ASME B16.5's own LWN rule; "
+                                     "flange_type=None, matching the OD/bolt-circle sharing pattern)",
+        "js_crm": "HUB_DIM[cls][nps][0]*25.4 - CRM's legacy table; values match to <0.01in on every "
+                  "spot-checked NPS/class (independent 3rd confirmation of X, no conflict for X)",
+    },
+    DIM_LENGTH_THROUGH_HUB: {
+        "python_dimension_library": "LengthThroughHub_WeldNeck_mm (flange_type=weld_neck) / "
+                                     "LengthThroughHub_LongWeldNeck_mm (flange_type=long_weld_neck, "
+                                     "fixed 229/305mm override, Prompt 42) - see "
+                                     "_ingest_hub_dimensions.py for the disclosed Y-convention "
+                                     "conflict with the CRM's own HUB_DIM table (RF-height-inclusion "
+                                     "difference, ~1.5mm, resolved in favor of the flat-plane "
+                                     "convention used by two independently cross-verified sources)",
+        "js_crm": "HUB_DIM[cls][nps][1]*25.4 - CRM's legacy table; ~1.5mm higher than the value "
+                  "ingested here for the same NPS/class - see conflict disclosure above",
+    },
     DIM_RAISED_FACE_DIAMETER: {"python_dimension_library": "RaisedFace_mm (JIS/EN only)", "js_crm": "RF_BORE[cls][nps]"},
     DIM_RAISED_FACE_HEIGHT: {"python_dimension_library": None, "js_crm": "rfHeightMM(cls) - derived rule, not tabulated"},
     DIM_WALL_THICKNESS: {"python_dimension_library": "WallThickness_mm", "js_crm": "PIPE_WT[sch][nps]"},

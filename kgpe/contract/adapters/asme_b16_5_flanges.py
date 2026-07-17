@@ -44,7 +44,32 @@ single-source deviation for Blind flange thickness are recorded in
 KGPE/_ingest_new_flange_types.py's module docstring (the script that
 populated these columns in the source JSON) - not repeated here.
 
-NOT ingested: bore/raised-face/hub fields, because they simply are not
+Prompt 42 additions - hub geometry (weld_neck flat-plate-plus-hub solid)
+and Long Weld Neck (LWN). Three new OPTIONAL fields, sourced/cross-
+verified per KGPE/_ingest_hub_dimensions.py's module docstring (which
+also discloses a ~1.5mm Y-convention conflict against the CRM's own
+legacy HUB_DIM table, resolved in favor of the two independently-
+cross-verified web sources):
+  HubBaseDiameter_mm               -> hub_base_diameter_mm  (flange_type=None: identical for
+                                                               weld_neck and long_weld_neck)
+  LengthThroughHub_WeldNeck_mm     -> length_through_hub_mm  (flange_type="weld_neck")
+  LengthThroughHub_LongWeldNeck_mm -> length_through_hub_mm  (flange_type="long_weld_neck": fixed
+                                                               229mm/305mm override, independent of
+                                                               pressure class - not a separate ASME
+                                                               B16.5 table, see script docstring)
+Long Weld Neck is NOT a separately-tabulated ASME B16.5 flange type - its
+OD/thickness/bolt-circle/bolt-hole/num-bolts/bolt-size are IDENTICAL to
+weld_neck at the same size/class (ASME B16.5's own explicit rule). Rather
+than have the long_weld_neck profile depend on weld_neck's own facts via
+a cross-subtype resolver path (no such mechanism exists for flange_type
+today), this adapter duplicates ONE fact under flange_type="long_weld_neck"
+- the SAME Thickness_WeldNeck_mm source value, re-tagged, not re-derived
+or fabricated - so long_weld_neck is a fully self-contained, independently
+resolvable subtype identity (OD/bolt-circle/bolt-hole are already
+flange_type=None and thus automatically shared, no duplication needed
+for those).
+
+NOT ingested: bore/raised-face fields, because they simply are not
 columns in this source file (confirmed Prompt 1/2) - there is nothing to
 ingest, not a field being skipped.
 """
@@ -140,6 +165,58 @@ _OPTIONAL_TYPE_THICKNESS_SPECS = (
 )
 
 
+# (json_field, canonical_dimension_name, flange_type, verification_note) -
+# OPTIONAL: Prompt 42 hub geometry + Long Weld Neck. Only emitted when
+# json_field is present (see _ingest_hub_dimensions.py - all 132 rows
+# have it after that merge, but this loop makes no assumption of that).
+_HUB_FIELD_SPECS = (
+    (
+        "HubBaseDiameter_mm", VOC.DIM_HUB_BASE_DIAMETER, None,
+        "Verified in KGPE Prompt 42: Texas Flange 'X' column, cross-checked against "
+        "pipingpipeline.com's explicitly-labeled 'X: diameter of hub at base' column, 0 mismatches "
+        "across 5 spot-checked (class, NPS) pairs. Also matches the KAFCO CRM dashboard's own "
+        "pre-existing legacy HUB_DIM table to <0.01in on every spot-checked value (independent "
+        "3rd confirmation - no conflict for this dimension). flange_type=None because ASME B16.5's "
+        "own LWN rule states hub base diameter is identical between weld_neck and long_weld_neck.",
+    ),
+    (
+        "LengthThroughHub_WeldNeck_mm", VOC.DIM_LENGTH_THROUGH_HUB, "weld_neck",
+        "Verified in KGPE Prompt 42: Texas Flange 'L2' column, cross-checked against "
+        "pipingpipeline.com's explicitly-labeled 'Y: length through hub' column, 0 mismatches "
+        "across 5 spot-checked (class, NPS) pairs. DISCLOSED CONFLICT: ~1.5mm lower than the "
+        "KAFCO CRM dashboard's own legacy HUB_DIM table for the same NPS/class - see "
+        "_ingest_hub_dimensions.py's module docstring for the RF-height-inclusion explanation and "
+        "why the two independently cross-verified web sources were preferred.",
+    ),
+    (
+        "LengthThroughHub_LongWeldNeck_mm", VOC.DIM_LENGTH_THROUGH_HUB, "long_weld_neck",
+        "Verified in KGPE Prompt 42: ASME B16.5's Long Weld Neck rule (229mm/9in for NPS<=4, "
+        "305mm/12in for NPS>4, independent of pressure class) per pipingpipeline.com's dedicated "
+        "LWN page, cross-corroborated (same 229/305 figures, unprompted) by semetalgroup.com, "
+        "steeljrv.com, dynamicforgefittings.com, and piping-designer.com in the same search pass. "
+        "Value is computed from NPS alone (not tabulated per-class, since it genuinely does not "
+        "vary by class) - see _ingest_hub_dimensions.py's lwn_length_through_hub_mm().",
+    ),
+)
+
+# (json_field, canonical_dimension_name, flange_type, verification_note) -
+# Prompt 42: long_weld_neck's own thickness fact. Long Weld Neck is not a
+# separately-tabulated ASME B16.5 flange type - its thickness is
+# EXPLICITLY the same "T" figure as standard weld_neck at the same
+# size/class (the standard's own "identical dimensions except Y" rule,
+# see module docstring) - this re-tags the SAME Thickness_WeldNeck_mm
+# source value under flange_type="long_weld_neck", never re-derived.
+_LONG_WELD_NECK_SHARED_THICKNESS_SPEC = (
+    (
+        "Thickness_WeldNeck_mm", VOC.DIM_FLANGE_THICKNESS_WELD_NECK, "long_weld_neck",
+        "Prompt 42: identical value to the weld_neck thickness fact above, re-tagged under "
+        "flange_type='long_weld_neck' per ASME B16.5's own explicit LWN rule ('dimensions and "
+        "tolerances of the standard welding neck flanges of the same size and class, except that "
+        "the length through hub shall be...') - not a separate source column, not re-derived.",
+    ),
+)
+
+
 def _load_source():
     rel_path = dl.FLANGE_FILES["ASME_B16.5"]
     full_path = os.path.join(dl.DIMLIB_ROOT, rel_path)
@@ -180,9 +257,9 @@ def _validate_row(class_key, index, row):
         errs.append(f"class {class_key} row {index}: NumBolts must be a positive integer, got {nb!r}")
     if not isinstance(row["BoltSize_in"], str) or not row["BoltSize_in"].strip():
         errs.append(f"class {class_key} row {index}: BoltSize_in must be a non-empty string, got {row['BoltSize_in']!r}")
-    # Optional Prompt 41 fields: not required on every row, but must be a
-    # positive number on any row where they ARE present.
-    for json_field, _dim, _flange_type, _note in _OPTIONAL_TYPE_THICKNESS_SPECS:
+    # Optional Prompt 41/42 fields: not required on every row, but must be
+    # a positive number on any row where they ARE present.
+    for json_field, _dim, _flange_type, _note in _OPTIONAL_TYPE_THICKNESS_SPECS + _HUB_FIELD_SPECS:
         if json_field not in row:
             continue
         v = row[json_field]
@@ -236,7 +313,12 @@ def _build_facts_for_row(class_key_raw, row, source_file_rel, standard_edition):
     # Prompt 41: optional Slip-On/Threaded/Socket-Weld/Lap-Joint/Blind
     # thickness facts - only for rows where the source JSON actually has
     # the field (never assumed present).
-    for json_field, dim_name, flange_type, verification_note in _OPTIONAL_TYPE_THICKNESS_SPECS:
+    # Prompt 42: optional hub geometry (base diameter, weld_neck/
+    # long_weld_neck length-through-hub) facts, same optional-emission
+    # mechanism.
+    for json_field, dim_name, flange_type, verification_note in (
+        _OPTIONAL_TYPE_THICKNESS_SPECS + _HUB_FIELD_SPECS + _LONG_WELD_NECK_SHARED_THICKNESS_SPEC
+    ):
         if json_field not in row:
             continue
         applicability = Applicability(

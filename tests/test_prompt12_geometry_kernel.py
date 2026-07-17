@@ -744,7 +744,7 @@ class TestLegacyIsolationAndDemo(unittest.TestCase):
     def test_data_layer_fingerprint_unchanged(self):
         self.assertEqual(
             _FINGERPRINT,
-            "3a9d18b5df1ee0349c36beae510f5d10e38cba966bbb1c5ed6264df52c5ef896",  # Prompt 41: shifted by new ASME B16.5 flange facts
+            "9301f07c27b8d7bb864fbc56a7999e13e241e40809ddf26d9a0c4981658d261b",  # Prompt 42: shifted by new ASME B16.5 hub/long_weld_neck facts
         )
 
 

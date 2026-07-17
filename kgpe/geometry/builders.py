@@ -285,6 +285,51 @@ def build_frustum_solid(large_radius, small_radius, length, radial_segments, sma
     return mesh, features
 
 
+def build_hollow_cylinder_with_hub(body_outer_radius, hub_outer_radius, bore_radius,
+                                    body_length, hub_length, radial_segments):
+    """Prompt 42: a flange body (`build_hollow_cylinder`, body_outer_radius,
+    spanning z in [0, body_length]) with a hub - a raised annular cylinder
+    of `hub_outer_radius` - stacked immediately after it, spanning z in
+    [body_length, body_length+hub_length]. Modeled as a STRAIGHT cylinder,
+    not the true ASME B16.5 taper toward the pipe OD at the weld end (no
+    consistently-published far-end/point-of-welding diameter across the
+    cross-verified sources - a documented simplification, not a
+    fabricated dimension; see kgpe.geometry.products.flange's module
+    docstring). Body and hub share ONE continuous bore (`bore_radius`)
+    throughout - physically correct, since a weld-neck flange is forged
+    as a single piece, never two separately-bored parts.
+
+    Like `build_tee_multi_feature`/`build_cross_multi_feature`, this is a
+    deterministic multi-feature mesh, NOT a boolean union - the body's
+    end-cap-at-z=body_length and the hub's start-cap-at-z=body_length are
+    two coincident (touching, non-overlapping-volume) annular disc faces,
+    an honest representation of a stacked composite, never fused into a
+    single watertight shell."""
+    body_mesh, body_features = build_hollow_cylinder(body_outer_radius, bore_radius, body_length, radial_segments)
+    hub_mesh, hub_features = build_hollow_cylinder(hub_outer_radius, bore_radius, hub_length, radial_segments)
+    for i, v in enumerate(hub_mesh.vertices):
+        hub_mesh.vertices[i] = (v[0], v[1], v[2] + body_length)
+    body_features = [dict(f, name=f"body_{f['name']}") for f in body_features]
+    return _merge_meshes(body_mesh, body_features, hub_mesh, hub_features, "hub_")
+
+
+def build_solid_cylinder_with_hub(body_outer_radius, hub_outer_radius, body_length, hub_length, radial_segments):
+    """Prompt 42: same composite as `build_hollow_cylinder_with_hub` but
+    for the no-resolved-bore case (body and hub both solid, external-
+    envelope only) - used when hub dimensions ARE available but bore
+    isn't (structurally possible even though today's only hub-bearing
+    standard, ASME_B16.5, always resolves a bore too via
+    FlangeBoreViaPipeScheduleRule when a mating pipe context is supplied;
+    this function exists so the hub is never silently dropped just
+    because bore context happened not to be supplied for a given call)."""
+    body_mesh, body_features = build_solid_cylinder(body_outer_radius, body_length, radial_segments)
+    hub_mesh, hub_features = build_solid_cylinder(hub_outer_radius, hub_length, radial_segments)
+    for i, v in enumerate(hub_mesh.vertices):
+        hub_mesh.vertices[i] = (v[0], v[1], v[2] + body_length)
+    body_features = [dict(f, name=f"body_{f['name']}") for f in body_features]
+    return _merge_meshes(body_mesh, body_features, hub_mesh, hub_features, "hub_")
+
+
 def _merge_meshes(mesh_a, features_a, mesh_b, features_b, prefix_b):
     """Deterministically merges mesh_b's vertices/faces onto the end of
     mesh_a (index-offset, append-only - Sec.13: a deterministic

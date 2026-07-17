@@ -115,14 +115,17 @@ PROFILE_PIPE = GeometryProfile(
 # (no bore modeled), never fabricated.
 # ---------------------------------------------------------------------------
 PROFILE_FLANGE_WELD_NECK = GeometryProfile(
-    profile_id="flange_weld_neck", version="2",
+    profile_id="flange_weld_neck", version="3",
     product_family=VOC.PRODUCT_FAMILY_FLANGE, subtypes=frozenset({"weld_neck"}),
     required_dimensions=frozenset({
         VOC.DIM_OUTSIDE_DIAMETER, VOC.DIM_FLANGE_THICKNESS_WELD_NECK,
         VOC.DIM_BOLT_CIRCLE_DIAMETER, VOC.DIM_BOLT_HOLE_DIAMETER,
         VOC.DIM_NUM_BOLTS, VOC.DIM_BOLT_SIZE_DESIGNATION,
     }),
-    optional_dimensions=frozenset({VOC.DIM_RAISED_FACE_DIAMETER, VOC.DIM_BORE_DIAMETER}),
+    optional_dimensions=frozenset({
+        VOC.DIM_RAISED_FACE_DIAMETER, VOC.DIM_BORE_DIAMETER,
+        VOC.DIM_HUB_BASE_DIAMETER, VOC.DIM_LENGTH_THROUGH_HUB,
+    }),
     construction_derivable_dimensions=frozenset(
         {VOC.DIM_BORE_DIAMETER, VOC.DIM_HUB_BASE_DIAMETER, VOC.DIM_LENGTH_THROUGH_HUB}),
     notes="v2 (Prompt 14): bore_diameter_mm no longer required at profile-compilation stage - "
@@ -132,9 +135,54 @@ PROFILE_FLANGE_WELD_NECK = GeometryProfile(
           "raised_face_diameter_mm is JIS_B2220-only, hence optional not required - and even where "
           "present, raised-face HEIGHT has zero production facts for any standard, so no raised-"
           "face geometry is generated this prompt (diameter-only partial feature, Prompt 14 "
-          "Sec.19). hub_base_diameter_mm/length_through_hub_mm have NO facts at all for any "
-          "flange standard - hub/neck taper is not modeled, matching rules/flange.py's own "
-          "documented v1 scope limitation.",
+          "Sec.19). "
+          "v3 (Prompt 42): hub_base_diameter_mm/length_through_hub_mm now DIRECTLY resolvable as "
+          "optional facts for ASME_B16.5 (see kgpe.contract.adapters.asme_b16_5_flanges' "
+          "_HUB_FIELD_SPECS) - moved into optional_dimensions alongside bore/raised-face (retained "
+          "in construction_derivable_dimensions too, matching bore_diameter_mm's own dual listing, "
+          "since no other standard/subtype has these facts yet and the distinction still matters "
+          "for coverage.py's per-standard gap reporting). JIS_B2220/EN_1092-1 have zero facts for "
+          "either - hub/neck taper remains unmodeled there exactly as before.",
+)
+
+# ---------------------------------------------------------------------------
+# Flange - Long Weld Neck (LWN, Prompt 42). NOT a separately-tabulated
+# ASME B16.5 flange type - a standard weld-neck flange with IDENTICAL
+# OD/thickness/bolt-circle/bolt-hole/hub-base-diameter, differing ONLY in
+# length_through_hub_mm (fixed 229mm for NPS<=4, 305mm for NPS>4,
+# independent of pressure class - ASME B16.5's own explicit LWN rule).
+# Represented as its own flange_type/subtype identity (matching the
+# Prompt 41 pattern) so it is independently selectable/resolvable without
+# any new cross-subtype fact-sharing mechanism - see kgpe.contract.
+# adapters.asme_b16_5_flanges' _LONG_WELD_NECK_SHARED_THICKNESS_SPEC for
+# how its thickness fact is populated (a re-tagged duplicate of
+# weld_neck's own T value, not re-derived).
+# ---------------------------------------------------------------------------
+PROFILE_FLANGE_LONG_WELD_NECK = GeometryProfile(
+    profile_id="flange_long_weld_neck", version="1",
+    product_family=VOC.PRODUCT_FAMILY_FLANGE, subtypes=frozenset({"long_weld_neck"}),
+    required_dimensions=frozenset({
+        VOC.DIM_OUTSIDE_DIAMETER, VOC.DIM_FLANGE_THICKNESS_WELD_NECK,
+        VOC.DIM_BOLT_CIRCLE_DIAMETER, VOC.DIM_BOLT_HOLE_DIAMETER,
+        VOC.DIM_NUM_BOLTS, VOC.DIM_BOLT_SIZE_DESIGNATION,
+        VOC.DIM_LENGTH_THROUGH_HUB,
+    }),
+    optional_dimensions=frozenset({
+        VOC.DIM_RAISED_FACE_DIAMETER, VOC.DIM_BORE_DIAMETER, VOC.DIM_HUB_BASE_DIAMETER,
+    }),
+    construction_derivable_dimensions=frozenset({VOC.DIM_BORE_DIAMETER}),
+    notes="Prompt 42: length_through_hub_mm is REQUIRED here (unlike flange_weld_neck, where it is "
+          "merely optional) - it is the one dimension that DEFINES long_weld_neck as distinct from "
+          "weld_neck (fixed 229mm/305mm by NPS, independent of pressure class); a long_weld_neck "
+          "request without it is not meaningfully 'long weld neck' at all, so GEOMETRY_READY "
+          "correctly requires it. hub_base_diameter_mm is shared with weld_neck (flange_type=None "
+          "fact, ASME B16.5's own 'identical except Y' rule) and remains merely optional since the "
+          "hub composite mesh is still generated (straight-cylinder simplification) whenever both "
+          "hub facts resolve, but the flat-plate body alone is still a valid, honest fallback if "
+          "hub_base_diameter_mm were ever missing. bore_diameter_mm policy identical to "
+          "flange_weld_neck (same 3-way JIS-direct / ASME-cross-family / EN-unavailable pattern) - "
+          "currently only ASME_B16.5 has any long_weld_neck facts at all, so only that standard is "
+          "GEOMETRY_READY today.",
 )
 
 
@@ -501,7 +549,7 @@ PROFILE_OLET_OUTLET_HEIGHT = GeometryProfile(
 )
 
 PROFILE_REGISTRY = [
-    PROFILE_PIPE, PROFILE_FLANGE_WELD_NECK,
+    PROFILE_PIPE, PROFILE_FLANGE_WELD_NECK, PROFILE_FLANGE_LONG_WELD_NECK,
     PROFILE_FLANGE_SLIP_ON, PROFILE_FLANGE_THREADED, PROFILE_FLANGE_SOCKET_WELD,
     PROFILE_FLANGE_LAP_JOINT, PROFILE_FLANGE_BLIND,
     PROFILE_BUTTWELD_ELBOW, PROFILE_BUTTWELD_TEE_EQUAL,

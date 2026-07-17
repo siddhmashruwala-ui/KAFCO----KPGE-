@@ -73,6 +73,9 @@ FLANGE_SUBTYPE_ALIASES = {
     "LJ": "lap_joint", "LAP JOINT": "lap_joint", "LAP-JOINT": "lap_joint", "LAPJOINT": "lap_joint",
     "LAP_JOINT": "lap_joint",
     "BL": "blind", "BLIND": "blind", "BLRF": "blind", "BLIND FLANGE": "blind",
+    "LWN": "long_weld_neck", "LONG WELD NECK": "long_weld_neck", "LONG WELDNECK": "long_weld_neck",
+    "LONG-WELD-NECK": "long_weld_neck", "LONG_WELD_NECK": "long_weld_neck", "STRAIGHT HUB": "long_weld_neck",
+    "STRAIGHT HUB FLANGE": "long_weld_neck",
 }
 
 BUTTWELD_SUBTYPE_ALIASES = {

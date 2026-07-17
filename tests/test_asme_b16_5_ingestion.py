@@ -75,13 +75,25 @@ class TestSuccessfulIngestion(unittest.TestCase):
         # five optional Slip-On/Threaded/Socket-Weld/Lap-Joint/Blind
         # thickness fields that happen to be present on that row (never
         # assumed present - counted directly from the source JSON).
+        #
+        # Prompt 42: every row ALSO now contributes 4 unconditional hub-
+        # related facts (all 132 rows carry all three hub fields per
+        # _ingest_hub_dimensions.py's merge, so these are folded into the
+        # base count rather than the optional list): HubBaseDiameter_mm
+        # (flange_type=None), LengthThroughHub_WeldNeck_mm
+        # (flange_type=weld_neck), LengthThroughHub_LongWeldNeck_mm
+        # (flange_type=long_weld_neck), plus one more emission of the
+        # SAME Thickness_WeldNeck_mm source field re-tagged
+        # flange_type=long_weld_neck (_LONG_WELD_NECK_SHARED_THICKNESS_SPEC
+        # - a duplicate fact, not a duplicate source field, matching
+        # ASME B16.5's own "LWN is weld_neck with a different Y" rule).
         optional_fields = ("Thickness_SlipOn_mm", "Thickness_LapJoint_mm",
                             "Thickness_Threaded_mm", "Thickness_SocketWeld_mm", "Thickness_Blind_mm")
         data, _ = adapter._load_source()
         expected = 0
         for rows in data["classes"].values():
             for row in rows:
-                expected += 6 + sum(1 for f in optional_fields if f in row)
+                expected += 6 + 4 + sum(1 for f in optional_fields if f in row)
         _, facts = adapter.ingest_asme_b16_5_flanges()
         self.assertEqual(len(facts), expected)
 
@@ -102,10 +114,24 @@ class TestDeterministicIngestion(unittest.TestCase):
 
 class TestWeldNeckApplicability(unittest.TestCase):
     def test_weld_neck_thickness_has_flange_type_weld_neck(self):
+        # Prompt 42: DIM_FLANGE_THICKNESS_WELD_NECK now carries facts for
+        # TWO flange_type tags - "weld_neck" (the original base fact) and
+        # "long_weld_neck" (_LONG_WELD_NECK_SHARED_THICKNESS_SPEC's
+        # re-tagged duplicate of the SAME Thickness_WeldNeck_mm source
+        # value, per ASME B16.5's own "LWN shares weld_neck's T" rule) -
+        # every fact must be tagged as one or the other, never anything
+        # else, and the weld_neck-tagged subset alone must still be
+        # non-empty (the original assertion's intent, preserved).
         _, facts = adapter.ingest_asme_b16_5_flanges()
         thickness_facts = [f for f in facts if f.dimension_name == VOC.DIM_FLANGE_THICKNESS_WELD_NECK]
         self.assertTrue(thickness_facts)
-        self.assertTrue(all(f.applicability.flange_type == "weld_neck" for f in thickness_facts))
+        self.assertTrue(all(f.applicability.flange_type in ("weld_neck", "long_weld_neck")
+                             for f in thickness_facts))
+        weld_neck_only = [f for f in thickness_facts if f.applicability.flange_type == "weld_neck"]
+        long_weld_neck_only = [f for f in thickness_facts if f.applicability.flange_type == "long_weld_neck"]
+        self.assertTrue(weld_neck_only)
+        self.assertTrue(long_weld_neck_only)
+        self.assertEqual(len(weld_neck_only), len(long_weld_neck_only))
 
     def test_shared_dimensions_have_no_false_flange_type_specificity(self):
         _, facts = adapter.ingest_asme_b16_5_flanges()
