@@ -64,6 +64,15 @@ STANDARD_ALIASES = {
 FLANGE_SUBTYPE_ALIASES = {
     "WN": "weld_neck", "WELD NECK": "weld_neck", "WELD-NECK": "weld_neck", "WELDNECK": "weld_neck",
     "WELD_NECK": "weld_neck",
+    # Prompt 41 additions.
+    "SO": "slip_on", "SLIP ON": "slip_on", "SLIP-ON": "slip_on", "SLIPON": "slip_on",
+    "SLIP_ON": "slip_on",
+    "TH": "threaded", "THD": "threaded", "THREADED": "threaded", "SCREWED": "threaded",
+    "SW": "socket_weld", "SOCKET WELD": "socket_weld", "SOCKET-WELD": "socket_weld",
+    "SOCKETWELD": "socket_weld", "SOCKET_WELD": "socket_weld",
+    "LJ": "lap_joint", "LAP JOINT": "lap_joint", "LAP-JOINT": "lap_joint", "LAPJOINT": "lap_joint",
+    "LAP_JOINT": "lap_joint",
+    "BL": "blind", "BLIND": "blind", "BLRF": "blind", "BLIND FLANGE": "blind",
 }
 
 BUTTWELD_SUBTYPE_ALIASES = {

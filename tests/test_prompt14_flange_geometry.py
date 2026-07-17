@@ -32,20 +32,20 @@ from kgpe.geometry.products import flange
 _READER, _ = build_canonical_reader()
 _FINGERPRINT = registry_fingerprint(_READER.registry)
 _RESOLVER = EngineeringResolver(_READER, _FINGERPRINT)
-_DATA_LAYER_FINGERPRINT = "9238ab3cb896101c545450df6f0ff070301b4ba68117771b4105e87606c2c873"
+_DATA_LAYER_FINGERPRINT = "3a9d18b5df1ee0349c36beae510f5d10e38cba966bbb1c5ed6264df52c5ef896"  # Prompt 41: shifted by new ASME B16.5 Slip-On/Threaded/Socket-Weld/Lap-Joint/Blind facts
 
 
 def _prep(**kwargs):
     return prepare_geometry_specification(EngineeringRequest(**kwargs), resolver=_RESOLVER)
 
 
-def _flange_spec(standard, primary_size, extra_dims=None, **rating):
-    kwargs = dict(product_family="flange", subtype="weld_neck", standard=standard, primary_size=primary_size)
+def _flange_spec(standard, primary_size, extra_dims=None, subtype="weld_neck", **rating):
+    kwargs = dict(product_family="flange", subtype=subtype, standard=standard, primary_size=primary_size)
     kwargs.update(rating)
     if extra_dims:
         kwargs["dimensions"] = extra_dims
     r = _prep(**kwargs)
-    assert r.is_ready(), (standard, primary_size, r.geometry_specification.warnings)
+    assert r.is_ready(), (standard, primary_size, subtype, r.geometry_specification.warnings)
     return r.geometry_specification
 
 
@@ -118,33 +118,64 @@ class TestFlangeCanonicalCoverageInspection(unittest.TestCase):
 
 
 class TestFlangeSubtypeSupportMatrix(unittest.TestCase):
-    """Sec.3: only weld_neck is a defined, canonical-data-backed profile
-    for any of the three standards - blind/slip-on/threaded/socket-weld/
-    lap-joint are UNSUPPORTED_BY_CANONICAL_DATA (no profile exists, never
-    fabricated from general engineering knowledge)."""
+    """Prompt 41: weld_neck, slip_on, threaded, socket_weld, lap_joint,
+    and blind are ALL now defined, canonical-data-backed profiles (ASME
+    B16.5) - only genuinely unknown/nonexistent subtypes ('loose',
+    'plate') remain unsupported, never fabricated from general
+    engineering knowledge."""
 
-    def test_weld_neck_is_the_only_defined_flange_profile(self):
+    def test_weld_neck_is_a_defined_flange_profile(self):
         profile = find_profile("flange", "weld_neck")
         self.assertIsNotNone(profile)
         self.assertEqual(profile.profile_id, "flange_weld_neck")
 
-    def test_blind_subtype_unsupported_by_canonical_data(self):
-        self.assertIsNone(find_profile("flange", "blind"))
+    def test_all_six_prompt41_subtypes_have_defined_profiles(self):
+        expected_profile_id = {
+            "weld_neck": "flange_weld_neck", "slip_on": "flange_slip_on",
+            "threaded": "flange_threaded", "socket_weld": "flange_socket_weld",
+            "lap_joint": "flange_lap_joint", "blind": "flange_blind",
+        }
+        for subtype, profile_id in expected_profile_id.items():
+            profile = find_profile("flange", subtype)
+            self.assertIsNotNone(profile, f"expected a defined profile for subtype={subtype!r}")
+            self.assertEqual(profile.profile_id, profile_id)
 
-    def test_slip_on_subtype_unsupported_by_canonical_data(self):
-        self.assertIsNone(find_profile("flange", "slip_on"))
+    def test_blind_profile_has_no_bore_dimension_anywhere(self):
+        # Sec.41: blind flanges have no through-bore by physical
+        # definition - bore_diameter_mm must be absent from required,
+        # optional, AND construction-derivable sets.
+        profile = find_profile("flange", "blind")
+        self.assertNotIn("bore_diameter_mm", profile.required_dimensions)
+        self.assertNotIn("bore_diameter_mm", profile.optional_dimensions)
+        self.assertNotIn("bore_diameter_mm", profile.construction_derivable_dimensions)
 
-    def test_threaded_socket_weld_lap_joint_unsupported(self):
-        for subtype in ("threaded", "socket_weld", "lap_joint", "loose", "plate"):
+    def test_four_bore_bearing_subtypes_use_shared_other_types_thickness(self):
+        for subtype in ("slip_on", "threaded", "socket_weld", "lap_joint"):
+            profile = find_profile("flange", subtype)
+            self.assertIn("flange_thickness_other_types_mm", profile.required_dimensions)
+            self.assertIn("bore_diameter_mm", profile.optional_dimensions)
+            self.assertIn("bore_diameter_mm", profile.construction_derivable_dimensions)
+
+    def test_unknown_subtypes_remain_unsupported(self):
+        for subtype in ("loose", "plate"):
             self.assertIsNone(find_profile("flange", subtype))
 
     def test_no_flange_type_other_than_weld_neck_has_any_facts(self):
-        # Confirms live: no standard's canonical data distinguishes a
-        # second flange_type identity at all (blind/slip-on facts do not
-        # exist under ANY flange_type value other than weld_neck/None).
-        for standard in ("ASME_B16.5", "JIS_B2220", "EN_1092-1"):
+        # JIS_B2220/EN_1092-1 canonical data still distinguishes no second
+        # flange_type identity (unchanged since Prompt 14). ASME_B16.5 is
+        # the sole exception as of Prompt 41: Slip-On/Threaded/Socket-Weld/
+        # Lap-Joint/Blind thickness facts now exist there, AND (unlike the
+        # original Prompt 41 landing) geometry profiles now wire all six
+        # up too - see test_all_six_prompt41_subtypes_have_defined_profiles
+        # above.
+        for standard in ("JIS_B2220", "EN_1092-1"):
             types = _READER.discover("flange_type", product_family="flange", standard=standard)
             self.assertTrue(set(types) <= {"weld_neck"})
+        asme_types = _READER.discover("flange_type", product_family="flange", standard="ASME_B16.5")
+        self.assertEqual(
+            set(asme_types),
+            {"weld_neck", "slip_on", "threaded", "socket_weld", "lap_joint", "blind"},
+        )
 
 
 class TestCrossStandardIdentityIsolation(unittest.TestCase):
@@ -375,24 +406,29 @@ class TestFlangeBoreViaPipeScheduleRuleHardening(unittest.TestCase):
 
 
 class TestBlindFlangeGeometry(unittest.TestCase):
-    """Sec.17: no canonical thickness/subtype data supports a blind
-    flange this prompt - confirmed genuinely unsupported, never
-    fabricated with borrowed weld-neck geometry."""
+    """Prompt 41: ASME B16.5 blind flange thickness ('C', single-sourced
+    from htpipe.com - see _ingest_new_flange_types.py) is now ingested
+    and wired up via PROFILE_FLANGE_BLIND - blind is GEOMETRY_READY for
+    ASME_B16.5. EN_1092-1/JIS_B2220 still have zero blind-thickness facts
+    (Prompt 41's adapter work only touched ASME_B16.5_Flanges.json), so
+    blind remains genuinely unsupported there - never fabricated with
+    borrowed weld-neck geometry."""
 
-    def test_blind_flange_request_has_no_profile(self):
-        # "blind" is not a recognized subtype identity at all in the
-        # canonical data this project ingests (confirmed live - no
-        # flange_type other than weld_neck/None has ever been recorded),
-        # so the request fails even earlier than profile selection - at
-        # engineering identity resolution itself. Either way, no blind-
-        # flange geometry is ever fabricated.
+    def test_blind_flange_request_is_ready_for_asme_b16_5(self):
         r = _prep(product_family="flange", subtype="blind", standard="ASME_B16.5",
                    primary_size="2", pressure_class="150")
+        self.assertTrue(r.is_ready(), r.geometry_specification.warnings)
+        self.assertEqual(r.geometry_specification.geometry_profile_id, "flange_blind")
+        self.assertIsNotNone(find_profile("flange", "blind"))
+
+    def test_blind_flange_request_still_unsupported_for_en_1092_1(self):
+        # No blind-thickness facts exist for EN_1092-1 - the profile IS
+        # defined now (unlike Prompt 14), but resolution of
+        # flange_thickness_blind_mm still fails for this standard, so the
+        # request is not ready - never fabricated.
+        r = _prep(product_family="flange", subtype="blind", standard="EN_1092-1",
+                   primary_size=50, pn="PN16")
         self.assertFalse(r.is_ready())
-        self.assertIn(r.geometry_specification.readiness_status,
-                       (GeometryReadinessStatus.GEOMETRY_PROFILE_UNAVAILABLE,
-                        GeometryReadinessStatus.UNSUPPORTED_GEOMETRY_REQUEST))
-        self.assertIsNone(find_profile("flange", "blind"))
 
 
 class TestRaisedFaceAndHubAndFaceType(unittest.TestCase):
@@ -528,10 +564,16 @@ class TestProductDispatchExpansion(unittest.TestCase):
         from kgpe.geometry.kernel import _PRODUCT_DISPATCH
         self.assertIn("flange_weld_neck", _PRODUCT_DISPATCH)
 
-    def test_unsupported_blind_profile_stays_unsupported(self):
+    def test_blind_profile_now_supported_and_dispatched(self):
+        # Prompt 41: blind is now GEOMETRY_READY for ASME_B16.5 and
+        # dispatches through _PRODUCT_DISPATCH like every other flange
+        # subtype - see TestPrompt41NewFlangeSubtypeGeometry below for
+        # full end-to-end coverage.
+        from kgpe.geometry.kernel import _PRODUCT_DISPATCH
         r = _prep(product_family="flange", subtype="blind", standard="ASME_B16.5",
                    primary_size="2", pressure_class="150")
-        self.assertFalse(r.is_ready())
+        self.assertTrue(r.is_ready(), r.geometry_specification.warnings)
+        self.assertIn("flange_blind", _PRODUCT_DISPATCH)
 
 
 class TestQuarantineAndLegacyFixtureIsolation(unittest.TestCase):
@@ -701,15 +743,29 @@ class TestRepresentativeScenarios(unittest.TestCase):
             pipe_standard="ASME_B36.10M", pipe_schedule=None)
         self.assertFalse(outcome.is_applied())
 
-    def test_12_blind_flange_not_canonically_supported(self):
+    def test_12_blind_flange_now_canonically_supported(self):
+        # Prompt 41: ASME B16.5 blind flange thickness is now ingested -
+        # this request IS ready, unlike Prompt 14.
         r = _prep(product_family="flange", subtype="blind", standard="ASME_B16.5",
                    primary_size="2", pressure_class="150")
-        self.assertFalse(r.is_ready())
+        self.assertTrue(r.is_ready(), r.geometry_specification.warnings)
 
-    def test_13_blind_flange_has_no_opening_by_construction(self):
-        # No blind profile exists at all (Sec.3/17) - confirmed there is
-        # no path that could produce a through-bore opening for "blind".
-        self.assertIsNone(find_profile("flange", "blind"))
+    def test_13_blind_flange_still_has_no_opening_by_construction(self):
+        # Prompt 41: a blind profile DOES exist now, but it deliberately
+        # carries no bore_diameter_mm anywhere (required/optional/
+        # construction-derivable) and products/flange.py hard-forces
+        # SOLID_EXTERNAL_ENVELOPE for this subtype - confirmed end-to-end,
+        # not just at the profile-declaration level.
+        profile = find_profile("flange", "blind")
+        self.assertIsNotNone(profile)
+        self.assertNotIn("bore_diameter_mm", profile.required_dimensions)
+        self.assertNotIn("bore_diameter_mm", profile.optional_dimensions)
+        self.assertNotIn("bore_diameter_mm", profile.construction_derivable_dimensions)
+        spec = _flange_spec("ASME_B16.5", "2", pressure_class="150", subtype="blind")
+        r = generate_geometry(spec)
+        self.assertTrue(r.is_generated())
+        self.assertEqual(r.topology_representation,
+                          TopologyRepresentation.SOLID_EXTERNAL_ENVELOPE_WITH_BOLT_HOLE_METADATA_NO_BOOLEAN_CUT)
 
     def test_14_asme_raised_face_unavailable_structured(self):
         spec = _flange_spec("ASME_B16.5", "2", pressure_class="150")
@@ -822,6 +878,87 @@ class TestRepresentativeScenarios(unittest.TestCase):
     def test_33_en_unsupported_subtype_handled_honestly(self):
         r = _prep(product_family="flange", subtype="blind", standard="EN_1092-1", primary_size=50, pn="PN16")
         self.assertFalse(r.is_ready())
+
+
+class TestPrompt41NewFlangeSubtypeGeometry(unittest.TestCase):
+    """Prompt 41: end-to-end geometry generation for the five newly wired
+    ASME B16.5 subtypes - slip_on, threaded, socket_weld, lap_joint,
+    blind. Mirrors the existing weld_neck ASME test patterns above
+    (solid-when-no-bore-supplied, hollow-via-cross-family-construction-
+    value, correct geometry_type/thickness measurement) rather than
+    inventing a new testing style."""
+
+    def test_slip_on_solid_generates_with_correct_geometry_type(self):
+        spec = _flange_spec("ASME_B16.5", "2", pressure_class="150", subtype="slip_on")
+        r = generate_geometry(spec)
+        self.assertTrue(r.is_generated(), r.generation_trace)
+        self.assertEqual(r.geometry_type, "flange_slip_on")
+        self.assertEqual(r.topology_representation,
+                          TopologyRepresentation.SOLID_EXTERNAL_ENVELOPE_WITH_BOLT_HOLE_METADATA_NO_BOOLEAN_CUT)
+
+    def test_threaded_solid_generates_with_correct_geometry_type(self):
+        spec = _flange_spec("ASME_B16.5", "2", pressure_class="150", subtype="threaded")
+        r = generate_geometry(spec)
+        self.assertTrue(r.is_generated(), r.generation_trace)
+        self.assertEqual(r.geometry_type, "flange_threaded")
+
+    def test_socket_weld_solid_generates_with_correct_geometry_type(self):
+        # Socket-weld is conventionally capped at NPS<=4 - use NPS 2.
+        spec = _flange_spec("ASME_B16.5", "2", pressure_class="150", subtype="socket_weld")
+        r = generate_geometry(spec)
+        self.assertTrue(r.is_generated(), r.generation_trace)
+        self.assertEqual(r.geometry_type, "flange_socket_weld")
+
+    def test_lap_joint_solid_generates_with_correct_geometry_type(self):
+        spec = _flange_spec("ASME_B16.5", "2", pressure_class="150", subtype="lap_joint")
+        r = generate_geometry(spec)
+        self.assertTrue(r.is_generated(), r.generation_trace)
+        self.assertEqual(r.geometry_type, "flange_lap_joint")
+
+    def test_blind_solid_generates_with_correct_geometry_type_and_own_thickness_dim(self):
+        spec = _flange_spec("ASME_B16.5", "2", pressure_class="150", subtype="blind")
+        r = generate_geometry(spec)
+        self.assertTrue(r.is_generated(), r.generation_trace)
+        self.assertEqual(r.geometry_type, "flange_blind")
+        self.assertEqual(r.topology_representation,
+                          TopologyRepresentation.SOLID_EXTERNAL_ENVELOPE_WITH_BOLT_HOLE_METADATA_NO_BOOLEAN_CUT)
+        self.assertIn("flange_thickness_blind_mm", r.geometry_payload["measurements"])
+        self.assertAlmostEqual(
+            r.geometry_payload["measurements"]["flange_thickness_blind_mm"],
+            spec.required_dimensions["flange_thickness_blind_mm"]["value"], places=3)
+
+    def test_bore_bearing_subtype_accepts_cross_family_bore_construction_value(self):
+        # Sec.14-16 pattern, now exercised for slip_on rather than
+        # weld_neck - confirms the parameterized builder still threads
+        # bore_value through correctly for a non-weld_neck subtype.
+        spec = _flange_spec("ASME_B16.5", "2", pressure_class="150", subtype="slip_on")
+        bore_cv = _asme_bore("2")
+        r = generate_geometry(spec, product_kwargs={"bore_value": bore_cv})
+        self.assertTrue(r.is_generated(), r.generation_trace)
+        self.assertEqual(r.topology_representation,
+                          TopologyRepresentation.HOLLOW_ANNULAR_BODY_WITH_BOLT_HOLE_METADATA_NO_BOOLEAN_CUT)
+        self.assertAlmostEqual(r.geometry_payload["measurements"]["bore_diameter_mm"], bore_cv.value, places=3)
+
+    def test_blind_never_bores_even_if_a_bore_value_is_mistakenly_supplied(self):
+        # Sec.41 hard-forced-solid guarantee: blind must ignore a
+        # bore_value even if one is (incorrectly) supplied by a caller,
+        # since profile.py's PROFILE_FLANGE_BLIND never resolves
+        # bore_diameter_mm as optional in the first place - this proves
+        # the defense-in-depth check inside products/flange.py itself.
+        spec = _flange_spec("ASME_B16.5", "2", pressure_class="150", subtype="blind")
+        bore_cv = _asme_bore("2")
+        r = generate_geometry(spec, product_kwargs={"bore_value": bore_cv})
+        self.assertTrue(r.is_generated(), r.generation_trace)
+        self.assertEqual(r.topology_representation,
+                          TopologyRepresentation.SOLID_EXTERNAL_ENVELOPE_WITH_BOLT_HOLE_METADATA_NO_BOOLEAN_CUT)
+        self.assertNotIn("bore_diameter_mm", r.geometry_payload["measurements"])
+
+    def test_all_five_new_subtypes_dispatch_via_kernel_product_dispatch(self):
+        from kgpe.geometry.kernel import _PRODUCT_DISPATCH
+        for profile_id in ("flange_slip_on", "flange_threaded", "flange_socket_weld",
+                            "flange_lap_joint", "flange_blind"):
+            self.assertIn(profile_id, _PRODUCT_DISPATCH)
+            self.assertIs(_PRODUCT_DISPATCH[profile_id], flange)
 
 
 if __name__ == "__main__":

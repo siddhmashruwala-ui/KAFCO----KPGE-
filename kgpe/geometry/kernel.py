@@ -48,6 +48,14 @@ from .products import olet as olet_product
 # "olet_outlet_height" (insufficient dims for any envelope - height-only)
 # remain UNDISPATCHED - genuinely unsupported/insufficient, never
 # fabricated.
+# Prompt 41: five new flange geometry_profile_id values (flange_slip_on/
+# flange_threaded/flange_socket_weld/flange_lap_joint/flange_blind, one
+# per kgpe.geometry_spec.profile.py entry) all dispatch to the SAME
+# flange_product module as flange_weld_neck - products/flange.py now
+# derives which of the six subtypes it is building directly from
+# geometry_specification.geometry_profile_id (its own
+# _SUBTYPE_BY_PROFILE_ID map), exactly like socketweld_elbow_tee already
+# internally subtype-dispatches within one profile_id/module pair above.
 _PRODUCT_DISPATCH = {
     "pipe": pipe_product,
     "buttweld_elbow": buttweld_elbow_product,
@@ -55,6 +63,11 @@ _PRODUCT_DISPATCH = {
     "buttweld_cap": cap_product,
     "buttweld_reducer": reducer_product,
     "flange_weld_neck": flange_product,
+    "flange_slip_on": flange_product,
+    "flange_threaded": flange_product,
+    "flange_socket_weld": flange_product,
+    "flange_lap_joint": flange_product,
+    "flange_blind": flange_product,
     "socketweld_elbow_tee": socketweld_elbow_tee_product,
     "socketweld_coupling": socketweld_coupling_product,
     "socketweld_cap": socketweld_cap_product,

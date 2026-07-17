@@ -209,6 +209,11 @@ DIM_RAISED_FACE_HEIGHT = "raised_face_height_mm"
 # distinct canonical names, never merged into one "flange thickness":
 DIM_FLANGE_THICKNESS_WELD_NECK = "flange_thickness_weld_neck_mm"
 DIM_FLANGE_THICKNESS_OTHER_TYPES = "flange_thickness_other_types_mm"
+# Prompt 41 addition: Blind flange minimum thickness is a THIRD distinct
+# ASME B16.5 figure - neither the weld-neck "T" nor the shared "other
+# types" TJ (slip-on/threaded/socket-weld/lap-joint) - never merged into
+# either existing name.
+DIM_FLANGE_THICKNESS_BLIND = "flange_thickness_blind_mm"
 DIM_BOLT_CIRCLE_DIAMETER = "bolt_circle_diameter_mm"
 DIM_BOLT_HOLE_DIAMETER = "bolt_hole_diameter_mm"
 DIM_HUB_BASE_DIAMETER = "hub_base_diameter_mm"
@@ -294,7 +299,7 @@ DIM_BEND_RADIUS = "bend_radius_mm"                                  # source: Be
 DIMENSION_NAMES = frozenset({
     DIM_OUTSIDE_DIAMETER, DIM_BORE_DIAMETER, DIM_RAISED_FACE_DIAMETER,
     DIM_RAISED_FACE_HEIGHT, DIM_FLANGE_THICKNESS_WELD_NECK,
-    DIM_FLANGE_THICKNESS_OTHER_TYPES, DIM_BOLT_CIRCLE_DIAMETER,
+    DIM_FLANGE_THICKNESS_OTHER_TYPES, DIM_FLANGE_THICKNESS_BLIND, DIM_BOLT_CIRCLE_DIAMETER,
     DIM_BOLT_HOLE_DIAMETER, DIM_HUB_BASE_DIAMETER, DIM_LENGTH_THROUGH_HUB,
     DIM_CENTRE_TO_END, DIM_END_TO_END, DIM_WALL_THICKNESS,
     DIM_NUM_BOLTS, DIM_BOLT_SIZE_DESIGNATION, DIM_MASS,
@@ -328,8 +333,15 @@ LEGACY_FIELD_MAP = {
         "js_crm": None,  # JS does not carry this distinct figure (Prompt 3 Sec.3)
     },
     DIM_FLANGE_THICKNESS_OTHER_TYPES: {
-        "python_dimension_library": None,  # Python does not carry this distinct figure yet
+        "python_dimension_library": "Thickness_SlipOn_mm / Thickness_LapJoint_mm / "
+                                     "Thickness_Threaded_mm / Thickness_SocketWeld_mm "
+                                     "(Prompt 41 - four applicability-scoped columns, one shared "
+                                     "canonical dimension name, per the pre-existing Prompt 3 design)",
         "js_crm": "FLG[cls][nps][1] (inches, requires *25.4) - verified = Texas Flange 'TJ' column",
+    },
+    DIM_FLANGE_THICKNESS_BLIND: {
+        "python_dimension_library": "Thickness_Blind_mm (Prompt 41)",
+        "js_crm": None,
     },
     DIM_BOLT_CIRCLE_DIAMETER: {"python_dimension_library": "BoltCircle_mm", "js_crm": "FLG[cls][nps][2]*25.4"},
     DIM_BOLT_HOLE_DIAMETER: {"python_dimension_library": "BoltHoleDia_mm", "js_crm": "BOLT_HOLE[cls][nps]*25.4"},

@@ -1511,3 +1511,123 @@ KGPE (pipe, flange, buttweld, socket-weld, branch-outlet) has a
 corresponding deterministic geometry implementation - annotation,
 visualization, export, optimization, and production hardening remain for
 later prompts per the 20-prompt plan.
+
+
+## Prompt 41 addendum (ASME B16.5 flange subtype expansion - Slip-On, Threaded, Socket-Weld, Lap-Joint, Blind + Long Weld Neck research)
+
+**Trigger:** user-noticed data-coverage gap - the CRM Part Configurator's
+flange subtype dropdown only ever offered `weld_neck`, since it was the
+only ASME B16.5 flange subtype this project's canonical data had ever
+ingested (Prompt 3's `Thickness_WeldNeck_mm` only). Direct instruction:
+add Slip-On, Threaded, Long Weld Neck, Blind, Lap Joint, Socket Weld.
+
+**Source data (`_ingest_new_flange_types.py`, one-off documented merge
+script, retained as the provenance record):** ASME B16.5 publishes ONE
+shared minimum-thickness figure ("TJ") for Slip-On/Threaded/Socket-Weld/
+Lap-Joint at Class 150/300, converging to the SAME figure as weld-neck
+("T") at Class 400/600/900/1500/2500 - sourced from Texas Flange's own
+"TJ"/"T" columns, cross-verified against Ferrobend's Class 150 Slip-On
+page (0 mismatches across 4 spot-checked sizes: NPS 1/2, 4, 10, 24).
+Blind flange thickness ("C") is a THIRD, genuinely distinct figure,
+single-sourced from htpipe.com after three other candidate sources were
+checked and disqualified: Texas Flange's own "C" column is identical
+across all 7 pressure classes for a given NPS (physically impossible for
+a pressure-rated thickness - it is some other, unlabeled dimension, not
+blind thickness); Ferrobend's "Blind" pages are templating-bug
+duplicates of their own Slip-On (Class 150) and weld-neck (Class 1500)
+pages; HardHat Engineer and metallectsteel.com both show an implausibly
+smooth per-size progression inconsistent with ASME B16.5's real
+plateau-then-step pattern and disagree with htpipe.com by up to ~30% at
+small sizes. Per-type/per-class NPS availability was read directly from
+each source's own flange-type icon lists (never assumed): Socket-Weld is
+capped at NPS<=4 and absent from Class 900/2500; Slip-On is absent from
+Class 2500; Threaded/Socket-Weld are limited to NPS 1/2-2-1/2 at Class
+900 (the documented "identical to Class 1500" rule). "Long Weld Neck" is
+NOT a separately-tabulated ASME B16.5 type (cross-verified against 2
+independent sources, pipingpipeline.com and semetalgroup.com) - it is a
+weld-neck flange with IDENTICAL body dimensions, differing only in the
+length-through-hub (Y), fixed at 229mm (NPS<=4) or 305mm (NPS>4) -
+implementation deferred since KGPE does not model hub/neck length for
+ANY flange type/subtype (a documented pre-existing gap, unchanged by
+this prompt).
+
+**Data layer (`kgpe/contract/vocabulary.py`, `kgpe/contract/adapters/
+asme_b16_5_flanges.py`):** new `DIM_FLANGE_THICKNESS_BLIND` dimension
+name (the existing `DIM_FLANGE_THICKNESS_OTHER_TYPES` already anticipated
+the Slip-On/Threaded/Socket-Weld/Lap-Joint figure per its Prompt 3
+docstring, confirming this session's mapping was architecturally
+consistent with prior intent, not improvised). New optional per-row JSON
+fields (`Thickness_SlipOn_mm`, `Thickness_LapJoint_mm`,
+`Thickness_Threaded_mm`, `Thickness_SocketWeld_mm`, `Thickness_Blind_mm`)
+merged into `ASME_B16.5_Flanges.json` and ingested via a new
+`_OPTIONAL_TYPE_THICKNESS_SPECS` tuple, each fact correctly tagged
+`flange_type=<subtype>` (never `None`) - confirmed live: 1326 total ASME
+B16.5 flange facts (`Counter({None: 660, 'weld_neck': 132, 'lap_joint':
+132, 'blind': 132, 'slip_on': 118, 'threaded': 113, 'socket_weld': 39})`),
+up from 792 before this prompt.
+
+**Geometry layer (`kgpe/geometry_spec/profile.py`,
+`kgpe/geometry/products/flange.py`, `kgpe/geometry/kernel.py`,
+`kgpe/resolver/aliases.py`):** five new `GeometryProfile` entries
+(`flange_slip_on`, `flange_threaded`, `flange_socket_weld`,
+`flange_lap_joint`, `flange_blind`) register alongside the existing
+`flange_weld_neck`. The four bore-bearing subtypes require
+`flange_thickness_other_types_mm` and carry the identical bore policy as
+weld-neck (optional direct fact / cross-family construction value via
+`FlangeBoreViaPipeScheduleRule` / unavailable); `flange_blind` requires
+`flange_thickness_blind_mm` and DELIBERATELY omits `bore_diameter_mm`
+from required, optional, AND construction-derivable sets - blind flanges
+have no through-bore by physical definition. `kgpe/geometry/products/
+flange.py` (previously hardcoded entirely to weld-neck) now derives which
+of the six subtypes it is building directly from
+`geometry_spec.geometry_profile_id` (a new `_SUBTYPE_BY_PROFILE_ID` map,
+1:1 with the six profile_ids) - one module still builds all six flange
+subtypes, never six near-duplicate files. Blind is additionally
+hard-forced in code (`_NO_BORE_SUBTYPES`) to ignore any `bore_value` even
+if one is mistakenly supplied by a caller - defense-in-depth alongside
+the profile-level omission. `kernel.py`'s `_PRODUCT_DISPATCH` gained five
+new entries, all pointing at the same `flange` product module (exactly
+like `socketweld_elbow_tee`'s existing internal-subtype-dispatch
+pattern). `resolver/aliases.py`'s `FLANGE_SUBTYPE_ALIASES` gained common
+free-text aliases for all five new subtypes (SO/SW/LJ/BL/THD etc.).
+`coverage.py`'s `EXISTING_GEOMETRY_COMPATIBILITY_MAPPING` gained one new
+documentation entry (no legacy `rules/flange.py` equivalent ever existed
+for these subtypes - `backward_compatible_adapter_possible: False`).
+
+**Tests:** `TestFlangeSubtypeSupportMatrix` rewritten (previously
+asserted all five new subtypes had NO profile - now asserts all six have
+correctly-mapped profiles, blind carries zero bore dimensions anywhere,
+and the four bore-bearing subtypes share `flange_thickness_other_types_mm`
++ full bore optionality). `TestBlindFlangeGeometry`,
+`TestProductDispatchExpansion`, and `TestRepresentativeScenarios`'s
+blind-specific tests rewritten from "blind is unsupported" to "blind is
+GEOMETRY_READY for ASME_B16.5, still unsupported for EN_1092-1" (three
+more pre-existing tests carried the same now-stale assumption beyond the
+support-matrix class, found and fixed via a full-suite run rather than
+grep alone). New `TestPrompt41NewFlangeSubtypeGeometry` class: end-to-end
+`GEOMETRY_GENERATED` verification for all five new subtypes (solid body,
+correct `geometry_type`, correct thickness-dimension key in measurements);
+a cross-family `bore_value` threading test on `slip_on` (proving the
+parameterized builder still supports the hollow-bore path for a
+non-weld_neck subtype); a hard-forced-solid test on `blind` proving a
+mistakenly-supplied `bore_value` is still ignored; a dispatch-registration
+test for all five new `geometry_profile_id`s. **Full regression: 758
+total tests pass** (748 Prompt 4-15 baseline + 10 net new/rewritten this
+prompt); data-layer fingerprint shifted (expected, since 534 new
+authoritative facts were legitimately added) to
+`3a9d18b5df1ee0349c36beae510f5d10e38cba966bbb1c5ed6264df52c5ef896`.
+
+**Live CRM verification:** `kgpe_bridge.py`'s `discovery_query()` and
+`resolve_geometry()` require ZERO changes - both were already built to
+compute every dropdown level live from the canonical registry ("never a
+hand-maintained list", per the module's own docstring) and to dispatch
+through KGPE's unmodified public entry points
+(`progressive_discovery()` / `run_pipeline()`). Confirmed live, directly
+against the updated KGPE package: `progressive_discovery(reader,
+product_family="flange", standard="ASME_B16.5")` now returns `subtypes:
+["blind", "lap_joint", "slip_on", "socket_weld", "threaded",
+"weld_neck"]` (previously `["weld_neck"]` only), and
+`progressive_discovery(..., subtype="slip_on")` returns
+`geometry_profile_available: true`. The CRM Part Configurator's flange
+subtype dropdown will reflect all six subtypes automatically on next
+server restart - no CRM-side code changes were needed or made.

@@ -38,9 +38,13 @@ _ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 # (The one test that mutates a fact builds its OWN fresh registry instead.)
 _REGISTRY, _COUNTS = build_canonical_registry()
 
-EXPECTED_BUILT_TOTAL = 5254
-EXPECTED_STORED_TOTAL = 4824
-EXPECTED_AUTHORITATIVE = 4663
+# Prompt 41: baseline shifted by 534 new ASME B16.5 Slip-On/Threaded/
+# Socket-Weld/Lap-Joint/Blind thickness facts (all VERIFIED_AUTHORITATIVE,
+# no conflicts/quarantine - manufacturer-specific and quarantined totals
+# are unaffected).
+EXPECTED_BUILT_TOTAL = 5788
+EXPECTED_STORED_TOTAL = 5358
+EXPECTED_AUTHORITATIVE = 5197
 EXPECTED_MANUFACTURER_SPECIFIC = 145
 EXPECTED_QUARANTINED_FACTS = 16
 EXPECTED_QUARANTINED_GROUPS = 8
@@ -69,7 +73,7 @@ class TestRegistryBaselineVerification(unittest.TestCase):
 
     def test_per_adapter_counts_match_prompt8(self):
         expected = {
-            "ASME_B16.5_flanges": 792, "ASME_B36_pipes": 409, "ASME_B16.9_buttweld": 864,
+            "ASME_B16.5_flanges": 1326, "ASME_B36_pipes": 409, "ASME_B16.9_buttweld": 864,
             "ASME_B16.11_socketweld": 750, "MSS_SP97_olets": 223, "JIS_B2220_flanges": 640,
             "JIS_pipes": 261, "JIS_buttweld": 149, "EN_1092-1_flanges": 792,
             "EN_pipes": 104, "EN_buttweld": 270,

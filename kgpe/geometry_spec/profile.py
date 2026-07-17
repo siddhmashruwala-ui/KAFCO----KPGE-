@@ -139,6 +139,132 @@ PROFILE_FLANGE_WELD_NECK = GeometryProfile(
 
 
 # ---------------------------------------------------------------------------
+# Flange - Slip-On / Threaded / Socket-Weld / Lap-Joint (Prompt 41). ASME
+# B16.5 publishes ONE shared minimum thickness figure ("TJ") across these
+# four subtypes at Class 150/300, converging to the SAME figure as
+# weld-neck ("T") at Class 400/600/900/1500/2500 (kgpe.contract.adapters.
+# asme_b16_5_flanges._OPTIONAL_TYPE_THICKNESS_SPECS resolves this at
+# ingestion time - the geometry layer only ever sees a single already-
+# resolved flange_thickness_other_types_mm fact per (class, NPS,
+# flange_type), never the raw T/TJ split). Socket-weld is capped at
+# NPS<=4 and absent from Class 900/2500; slip-on is absent from Class
+# 2500 - these are NPS/class availability gaps in the underlying facts,
+# not modeled here (a profile only declares which dimension NAME is
+# required, never which sizes/classes have it - identical in kind to how
+# PROFILE_PIPE says nothing about which pipe standards cover which NPS).
+# All four subtypes have an actual through-bore (unlike blind) - same
+# 3-way bore policy as flange_weld_neck (JIS_B2220 direct fact /
+# ASME_B16.5 cross-family construction value via
+# FlangeBoreViaPipeScheduleRule / EN_1092-1 unavailable), though in
+# practice ASME_B16.5 is currently the only standard with any canonical
+# facts at all for these four subtypes (Prompt 41's adapter work only
+# touched ASME_B16.5_Flanges.json).
+# ---------------------------------------------------------------------------
+PROFILE_FLANGE_SLIP_ON = GeometryProfile(
+    profile_id="flange_slip_on", version="1",
+    product_family=VOC.PRODUCT_FAMILY_FLANGE, subtypes=frozenset({"slip_on"}),
+    required_dimensions=frozenset({
+        VOC.DIM_OUTSIDE_DIAMETER, VOC.DIM_FLANGE_THICKNESS_OTHER_TYPES,
+        VOC.DIM_BOLT_CIRCLE_DIAMETER, VOC.DIM_BOLT_HOLE_DIAMETER,
+        VOC.DIM_NUM_BOLTS, VOC.DIM_BOLT_SIZE_DESIGNATION,
+    }),
+    optional_dimensions=frozenset({VOC.DIM_RAISED_FACE_DIAMETER, VOC.DIM_BORE_DIAMETER}),
+    construction_derivable_dimensions=frozenset(
+        {VOC.DIM_BORE_DIAMETER, VOC.DIM_HUB_BASE_DIAMETER, VOC.DIM_LENGTH_THROUGH_HUB}),
+    notes="Prompt 41: ASME B16.5 slip-on flange thickness ('TJ', shared with threaded/"
+          "socket-weld/lap-joint at Class 150/300, convergent with weld-neck 'T' at Class "
+          "400+) - see kgpe.contract.adapters.asme_b16_5_flanges module docstring and "
+          "_ingest_new_flange_types.py for full sourcing/cross-verification detail. Absent "
+          "from Class 2500 (no source coverage) - a per-size/class data gap, not a "
+          "profile-level restriction. bore_diameter_mm policy identical to flange_weld_neck "
+          "(v2 pattern).",
+)
+
+PROFILE_FLANGE_THREADED = GeometryProfile(
+    profile_id="flange_threaded", version="1",
+    product_family=VOC.PRODUCT_FAMILY_FLANGE, subtypes=frozenset({"threaded"}),
+    required_dimensions=frozenset({
+        VOC.DIM_OUTSIDE_DIAMETER, VOC.DIM_FLANGE_THICKNESS_OTHER_TYPES,
+        VOC.DIM_BOLT_CIRCLE_DIAMETER, VOC.DIM_BOLT_HOLE_DIAMETER,
+        VOC.DIM_NUM_BOLTS, VOC.DIM_BOLT_SIZE_DESIGNATION,
+    }),
+    optional_dimensions=frozenset({VOC.DIM_RAISED_FACE_DIAMETER, VOC.DIM_BORE_DIAMETER}),
+    construction_derivable_dimensions=frozenset(
+        {VOC.DIM_BORE_DIAMETER, VOC.DIM_HUB_BASE_DIAMETER, VOC.DIM_LENGTH_THROUGH_HUB}),
+    notes="Prompt 41: shared 'TJ'/'T' thickness figure, same as flange_slip_on above. "
+          "Thread engagement length (the source's 'Thr' column) is NOT ingested - a distinct "
+          "dimension from minimum flange thickness, out of scope - thread geometry itself is "
+          "not modeled, only the flange body. bore_diameter_mm policy identical to "
+          "flange_weld_neck.",
+)
+
+PROFILE_FLANGE_SOCKET_WELD = GeometryProfile(
+    profile_id="flange_socket_weld", version="1",
+    product_family=VOC.PRODUCT_FAMILY_FLANGE, subtypes=frozenset({"socket_weld"}),
+    required_dimensions=frozenset({
+        VOC.DIM_OUTSIDE_DIAMETER, VOC.DIM_FLANGE_THICKNESS_OTHER_TYPES,
+        VOC.DIM_BOLT_CIRCLE_DIAMETER, VOC.DIM_BOLT_HOLE_DIAMETER,
+        VOC.DIM_NUM_BOLTS, VOC.DIM_BOLT_SIZE_DESIGNATION,
+    }),
+    optional_dimensions=frozenset({VOC.DIM_RAISED_FACE_DIAMETER, VOC.DIM_BORE_DIAMETER}),
+    construction_derivable_dimensions=frozenset(
+        {VOC.DIM_BORE_DIAMETER, VOC.DIM_HUB_BASE_DIAMETER, VOC.DIM_LENGTH_THROUGH_HUB}),
+    notes="Prompt 41: shared 'TJ'/'T' thickness figure, same as flange_slip_on above. "
+          "Conventionally capped at NPS<=4 and absent from Class 900/2500 in the source - a "
+          "per-size/class data gap, not a profile-level restriction. Socket-weld DEPTH (the "
+          "counterbore that receives the pipe end) is a separate dimension, not ingested this "
+          "prompt - not modeled. bore_diameter_mm policy identical to flange_weld_neck.",
+)
+
+PROFILE_FLANGE_LAP_JOINT = GeometryProfile(
+    profile_id="flange_lap_joint", version="1",
+    product_family=VOC.PRODUCT_FAMILY_FLANGE, subtypes=frozenset({"lap_joint"}),
+    required_dimensions=frozenset({
+        VOC.DIM_OUTSIDE_DIAMETER, VOC.DIM_FLANGE_THICKNESS_OTHER_TYPES,
+        VOC.DIM_BOLT_CIRCLE_DIAMETER, VOC.DIM_BOLT_HOLE_DIAMETER,
+        VOC.DIM_NUM_BOLTS, VOC.DIM_BOLT_SIZE_DESIGNATION,
+    }),
+    optional_dimensions=frozenset({VOC.DIM_RAISED_FACE_DIAMETER, VOC.DIM_BORE_DIAMETER}),
+    construction_derivable_dimensions=frozenset(
+        {VOC.DIM_BORE_DIAMETER, VOC.DIM_HUB_BASE_DIAMETER, VOC.DIM_LENGTH_THROUGH_HUB}),
+    notes="Prompt 41: shared 'TJ'/'T' thickness figure, same as flange_slip_on above. "
+          "Modeled as a plain annular body identical in shape to slip-on - the lap-joint's "
+          "companion stub-end backing ring is a SEPARATE mating part with its own dimensions, "
+          "not ingested or modeled here (out of scope). bore_diameter_mm policy identical to "
+          "flange_weld_neck.",
+)
+
+# ---------------------------------------------------------------------------
+# Flange - Blind (Prompt 41). ASME B16.5 publishes its OWN minimum
+# thickness figure ("C") for blind flanges, distinct from both weld-neck
+# "T" and the shared "TJ" - see DIM_FLANGE_THICKNESS_BLIND. Blind flanges
+# have NO through-bore by physical definition (they close off the pipe
+# end entirely) - bore_diameter_mm is deliberately absent from this
+# profile's optional_dimensions AND construction_derivable_dimensions
+# (unlike every other flange profile above) - the geometry layer
+# (kgpe.geometry.products.flange) must never attempt bore resolution for
+# this subtype, always SOLID_EXTERNAL_ENVELOPE.
+# ---------------------------------------------------------------------------
+PROFILE_FLANGE_BLIND = GeometryProfile(
+    profile_id="flange_blind", version="1",
+    product_family=VOC.PRODUCT_FAMILY_FLANGE, subtypes=frozenset({"blind"}),
+    required_dimensions=frozenset({
+        VOC.DIM_OUTSIDE_DIAMETER, VOC.DIM_FLANGE_THICKNESS_BLIND,
+        VOC.DIM_BOLT_CIRCLE_DIAMETER, VOC.DIM_BOLT_HOLE_DIAMETER,
+        VOC.DIM_NUM_BOLTS, VOC.DIM_BOLT_SIZE_DESIGNATION,
+    }),
+    optional_dimensions=frozenset({VOC.DIM_RAISED_FACE_DIAMETER}),
+    notes="Prompt 41: blind flange thickness ('C') is single-sourced (htpipe.com) after "
+          "three other candidate sources proved unreliable on inspection - see "
+          "_ingest_new_flange_types.py module docstring for the full sourcing/"
+          "disqualification record. No bore_diameter_mm anywhere in this profile (required, "
+          "optional, or construction-derivable) - blind flanges have no through-bore by "
+          "physical definition, always SOLID_EXTERNAL_ENVELOPE, never a candidate for "
+          "FlangeBoreViaPipeScheduleRule.",
+)
+
+
+# ---------------------------------------------------------------------------
 # Buttweld elbows (any radius/angle variant, ASME/EN/JIS). Confirmed live:
 # outside_diameter_mm is a SHARED cross-subtype canonical identity at
 # ASME_B16.9/EN_10253 (fitting_type=None on the underlying facts - resolved
@@ -375,7 +501,10 @@ PROFILE_OLET_OUTLET_HEIGHT = GeometryProfile(
 )
 
 PROFILE_REGISTRY = [
-    PROFILE_PIPE, PROFILE_FLANGE_WELD_NECK, PROFILE_BUTTWELD_ELBOW, PROFILE_BUTTWELD_TEE_EQUAL,
+    PROFILE_PIPE, PROFILE_FLANGE_WELD_NECK,
+    PROFILE_FLANGE_SLIP_ON, PROFILE_FLANGE_THREADED, PROFILE_FLANGE_SOCKET_WELD,
+    PROFILE_FLANGE_LAP_JOINT, PROFILE_FLANGE_BLIND,
+    PROFILE_BUTTWELD_ELBOW, PROFILE_BUTTWELD_TEE_EQUAL,
     PROFILE_BUTTWELD_CAP, PROFILE_BUTTWELD_REDUCER, PROFILE_SOCKETWELD_ELBOW_TEE,
     PROFILE_SOCKETWELD_COUPLING, PROFILE_SOCKETWELD_CAP, PROFILE_OLET_BODY, PROFILE_OLET_OUTLET_HEIGHT,
 ]

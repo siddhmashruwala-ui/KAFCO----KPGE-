@@ -68,11 +68,22 @@ class TestSuccessfulIngestion(unittest.TestCase):
         self.assertGreater(len(facts), 0)
         self.assertEqual(len(facts), len(registry.all_facts()))
 
-    def test_record_count_is_six_per_source_row(self):
+    def test_record_count_is_six_base_plus_optional_type_facts_per_source_row(self):
+        # Prompt 41: every row still contributes exactly 6 base facts
+        # (OD, weld-neck thickness, bolt circle, bolt hole, num bolts,
+        # bolt size designation) PLUS one additional fact for each of the
+        # five optional Slip-On/Threaded/Socket-Weld/Lap-Joint/Blind
+        # thickness fields that happen to be present on that row (never
+        # assumed present - counted directly from the source JSON).
+        optional_fields = ("Thickness_SlipOn_mm", "Thickness_LapJoint_mm",
+                            "Thickness_Threaded_mm", "Thickness_SocketWeld_mm", "Thickness_Blind_mm")
         data, _ = adapter._load_source()
-        total_rows = sum(len(rows) for rows in data["classes"].values())
+        expected = 0
+        for rows in data["classes"].values():
+            for row in rows:
+                expected += 6 + sum(1 for f in optional_fields if f in row)
         _, facts = adapter.ingest_asme_b16_5_flanges()
-        self.assertEqual(len(facts), total_rows * 6)
+        self.assertEqual(len(facts), expected)
 
 
 class TestDeterministicIngestion(unittest.TestCase):

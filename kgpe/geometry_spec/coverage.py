@@ -168,6 +168,24 @@ EXISTING_GEOMETRY_COMPATIBILITY_MAPPING = [
         "backward_compatible_adapter_possible": True,
     },
     {
+        "existing_geometry_path": "flange slip_on/threaded/socket_weld/lap_joint/blind - NONE, no "
+                                   "legacy rules/flange.py branch ever distinguished flange_type at all "
+                                   "(it always read Thickness_WeldNeck_mm unconditionally, regardless of "
+                                   "what the caller actually ordered).",
+        "geometry_profile_id": "flange_slip_on / flange_threaded / flange_socket_weld / "
+                                "flange_lap_joint / flange_blind",
+        "exact_mapping": "Prompt 41: NEW canonical facts only (Thickness_SlipOn_mm/"
+                          "Thickness_LapJoint_mm/Thickness_Threaded_mm/Thickness_SocketWeld_mm map onto "
+                          "flange_thickness_other_types_mm; Thickness_Blind_mm maps onto "
+                          "flange_thickness_blind_mm) - no prior legacy code to compare against.",
+        "missing_canonical_dimensions": ["bore_diameter_mm for blind (never applicable - no "
+                                          "through-bore by physical definition)",
+                                          "hub_base_diameter_mm/length_through_hub_mm (same zero-fact "
+                                          "gap as weld_neck)"],
+        "legacy_heuristic_inputs": [],
+        "backward_compatible_adapter_possible": False,
+    },
+    {
         "existing_geometry_path": "olet (rules/olet.py)",
         "geometry_profile_id": "olet_body / olet_outlet_height",
         "exact_mapping": "None - rules/olet.py unconditionally returns GEOMETRY_DEFINITION_INCOMPLETE; "
