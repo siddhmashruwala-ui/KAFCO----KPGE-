@@ -100,10 +100,21 @@ FITTING_TYPE_WELDOLET_FULL = "weldolet_full"          # MSS SP-97 official branc
 FITTING_TYPE_WELDOLET = "weldolet"                    # MSS SP-97 (Bonney Forge) manufacturer body dims, size-on-size
 FITTING_TYPE_SOCKOLET = "sockolet"                    # MSS SP-97 (Bonney Forge) manufacturer body dims
 FITTING_TYPE_THREADOLET = "threadolet"                # MSS SP-97 (Bonney Forge) manufacturer body dims
+# Nipoflange: a forged branch-outlet fitting (same structural family as
+# weldolet/sockolet/threadolet) that terminates in an integral raised-face
+# flange rather than a weld bevel/socket/thread end. Kept under
+# PRODUCT_FAMILY_OLET (not a new top-level product family) because it is
+# engineering-equivalent to the other branch-outlet fitting types, only
+# the terminal end differs - exactly what fitting_type already exists to
+# distinguish. Data source: KAFCO's own Nipoflange catalog (manufacturer-
+# specific, not an MSS/ASME standard table) - see
+# adapters/kafco_nipoflange.py.
+FITTING_TYPE_NIPOFLANGE = "nipoflange"
 
 OLET_FITTING_TYPES = frozenset({
     FITTING_TYPE_WELDOLET_REDUCING, FITTING_TYPE_WELDOLET_FULL,
     FITTING_TYPE_WELDOLET, FITTING_TYPE_SOCKOLET, FITTING_TYPE_THREADOLET,
+    FITTING_TYPE_NIPOFLANGE,
 })
 
 FITTING_TYPE_ELBOW_90_LR_JIS = "elbow_90_lr_jis"
@@ -291,6 +302,19 @@ DIM_OLET_BASE_OUTSIDE_DIAMETER = "olet_base_outside_diameter_mm"  # source: C_ba
 DIM_OLET_BORE_DIAMETER = "olet_bore_diameter_mm"       # source: D_bore_mm
 DIM_OLET_SOCKET_DIAMETER = "olet_socket_diameter_mm"   # source: E_socketDia_mm (sockolet only)
 
+# Nipoflange-specific dimensions (KAFCO manufacturer catalog - see
+# adapters/kafco_nipoflange.py). Deliberately NOT reusing
+# DIM_OUTSIDE_DIAMETER/DIM_FLANGE_THICKNESS_OTHER_TYPES even though the
+# source states "flange dimensions to ANSI B16.5": that claim was not
+# independently cross-checked cell-by-cell against the ASME B16.5 table
+# ingested elsewhere in this project, so silently aliasing to the ASME
+# canonical names would assert a cross-standard equality this adapter
+# never verified (same discipline as Prompt 7/8's cross-standard-equality
+# rule). Weight reuses the existing generic DIM_MASS - no new name needed.
+DIM_NIPOFLANGE_FLANGE_OD = "nipoflange_flange_od_mm"                # source: FlangeOD_A_mm
+DIM_NIPOFLANGE_OVERALL_LENGTH = "nipoflange_overall_length_mm"      # source: OverallLength_B_mm - CONSTRUCTION_PARAMETER, purchaser-modifiable per source Note 2
+DIM_NIPOFLANGE_FLANGE_THICKNESS = "nipoflange_flange_thickness_mm"  # source: FlangeThk_D_mm (includes RF thickness per source Note 3)
+
 # Prompt 8 additions - EN/DIN buttweld-specific dimensions not already
 # covered by a reused ASME name.
 DIM_RETURN_180_CENTRE_TO_CENTRE = "return_180_centre_to_centre_mm"  # source: Return180_CtoC_mm
@@ -312,6 +336,7 @@ DIMENSION_NAMES = frozenset({
     DIM_BRANCH_OUTLET_HEIGHT, DIM_OLET_HEIGHT, DIM_OLET_FACE_TO_FACE,
     DIM_OLET_BASE_OUTSIDE_DIAMETER, DIM_OLET_BORE_DIAMETER, DIM_OLET_SOCKET_DIAMETER,
     DIM_RETURN_180_CENTRE_TO_CENTRE, DIM_BEND_RADIUS,
+    DIM_NIPOFLANGE_FLANGE_OD, DIM_NIPOFLANGE_OVERALL_LENGTH, DIM_NIPOFLANGE_FLANGE_THICKNESS,
 })
 
 NON_LENGTH_DIMENSION_NAMES = frozenset({DIM_NUM_BOLTS, DIM_BOLT_SIZE_DESIGNATION})

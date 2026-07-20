@@ -51,6 +51,11 @@ STANDARD_RATING_SYSTEM = {
     "EN_10216_10217": RATING_WALL_DESIGNATION,
     "MSS_SP97": RATING_SCHEDULE,
     "ASME_B16.9": None, "JIS_B2311_2312": None, "EN_10253": None,
+    # KAFCO Nipoflange catalog: rows are keyed by ANSI class (150-2500),
+    # same rating system as the ASME B16.5 flange dimensions its flange
+    # face is stated to follow (source Note 1) - see
+    # adapters/kafco_nipoflange.py.
+    "KAFCO_NIPOFLANGE": RATING_ASME_CLASS,
 }
 
 # which EngineeringRequest field carries the raw value for each rating system

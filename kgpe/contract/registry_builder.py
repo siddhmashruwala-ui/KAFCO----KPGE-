@@ -23,6 +23,7 @@ from .adapters.asme_b36_pipes import ingest_asme_pipes
 from .adapters.asme_b16_9_buttweld import ingest_asme_b16_9_buttweld
 from .adapters.asme_b16_11_socketweld import ingest_asme_b16_11_socketweld
 from .adapters.mss_sp97_olets import ingest_mss_sp97_olets
+from .adapters.kafco_nipoflange import ingest_kafco_nipoflange
 from .adapters.jis_b2220_flanges import ingest_jis_b2220_flanges
 from .adapters.jis_pipes import ingest_jis_pipes
 from .adapters.jis_buttweld import ingest_jis_buttweld
@@ -40,6 +41,7 @@ _ADAPTERS = (
     ("ASME_B16.9_buttweld", ingest_asme_b16_9_buttweld),
     ("ASME_B16.11_socketweld", ingest_asme_b16_11_socketweld),
     ("MSS_SP97_olets", ingest_mss_sp97_olets),
+    ("KAFCO_Nipoflange", ingest_kafco_nipoflange),
     ("JIS_B2220_flanges", ingest_jis_b2220_flanges),
     ("JIS_pipes", ingest_jis_pipes),
     ("JIS_buttweld", ingest_jis_buttweld),
