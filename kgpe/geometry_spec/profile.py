@@ -313,6 +313,40 @@ PROFILE_FLANGE_BLIND = GeometryProfile(
 
 
 # ---------------------------------------------------------------------------
+# Flange - Nipoflange (KAFCO catalog, Prompt "2026-07-20 nipoflange
+# reclassification"). No profile existed for this subtype at all until
+# now - that's the PROFILE_SELECTION failure the CRM's Engineering
+# Identity configurator surfaced live. Every dimension the
+# kafco_nipoflange adapter ingests is VERIFIED_MANUFACTURER_SPECIFIC
+# (KAFCO's own catalog, not an ASME/MSS standard table) - same policy as
+# PROFILE_OLET_BODY above: manufacturer_specific=MFR_REQUIRED, so a
+# request without manufacturer_profile='KAFCO' +
+# allow_manufacturer_specific=True correctly returns
+# MANUFACTURER_CONTEXT_REQUIRED rather than silently defaulting.
+# Overall length (DIM_NIPOFLANGE_OVERALL_LENGTH) is intentionally NOT
+# listed here - it's a ConstructionParameter (purchaser-modifiable per
+# the source's own Note 2), not a resolvable EngineeringFact, so it can
+# never satisfy a profile's required/optional dimension set the way
+# CanonicalReader.available_dimensions() resolves them.
+# ---------------------------------------------------------------------------
+PROFILE_FLANGE_NIPOFLANGE = GeometryProfile(
+    profile_id="flange_nipoflange", version="1",
+    product_family=VOC.PRODUCT_FAMILY_FLANGE, subtypes=frozenset({VOC.FLANGE_TYPE_NIPOFLANGE}),
+    required_dimensions=frozenset({
+        VOC.DIM_NIPOFLANGE_FLANGE_OD, VOC.DIM_NIPOFLANGE_FLANGE_THICKNESS,
+    }),
+    optional_dimensions=frozenset({VOC.DIM_MASS}),
+    manufacturer_specific=MFR_REQUIRED,
+    notes="Dimension-level identity only (flange OD/thickness/weight) - this profile does not "
+          "by itself imply a registered 3D geometry-kernel product generator exists for "
+          "'flange'+'nipoflange' (kgpe.geometry.products has none yet, matching every other "
+          "olet-family subtype's current state). Adding this profile moves a nipoflange request "
+          "past PROFILE_SELECTION/dimension resolution to GEOMETRY_READY at the specification "
+          "layer; actual mesh GENERATION (GeometryKernel.generate()) is a separate, larger, not-"
+          "yet-built task - see kafco_nipoflange.py adapter docstring.",
+)
+
+# ---------------------------------------------------------------------------
 # Buttweld elbows (any radius/angle variant, ASME/EN/JIS). Confirmed live:
 # outside_diameter_mm is a SHARED cross-subtype canonical identity at
 # ASME_B16.9/EN_10253 (fitting_type=None on the underlying facts - resolved
@@ -551,7 +585,7 @@ PROFILE_OLET_OUTLET_HEIGHT = GeometryProfile(
 PROFILE_REGISTRY = [
     PROFILE_PIPE, PROFILE_FLANGE_WELD_NECK, PROFILE_FLANGE_LONG_WELD_NECK,
     PROFILE_FLANGE_SLIP_ON, PROFILE_FLANGE_THREADED, PROFILE_FLANGE_SOCKET_WELD,
-    PROFILE_FLANGE_LAP_JOINT, PROFILE_FLANGE_BLIND,
+    PROFILE_FLANGE_LAP_JOINT, PROFILE_FLANGE_BLIND, PROFILE_FLANGE_NIPOFLANGE,
     PROFILE_BUTTWELD_ELBOW, PROFILE_BUTTWELD_TEE_EQUAL,
     PROFILE_BUTTWELD_CAP, PROFILE_BUTTWELD_REDUCER, PROFILE_SOCKETWELD_ELBOW_TEE,
     PROFILE_SOCKETWELD_COUPLING, PROFILE_SOCKETWELD_CAP, PROFILE_OLET_BODY, PROFILE_OLET_OUTLET_HEIGHT,
