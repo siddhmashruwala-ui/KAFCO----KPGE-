@@ -100,22 +100,23 @@ FITTING_TYPE_WELDOLET_FULL = "weldolet_full"          # MSS SP-97 official branc
 FITTING_TYPE_WELDOLET = "weldolet"                    # MSS SP-97 (Bonney Forge) manufacturer body dims, size-on-size
 FITTING_TYPE_SOCKOLET = "sockolet"                    # MSS SP-97 (Bonney Forge) manufacturer body dims
 FITTING_TYPE_THREADOLET = "threadolet"                # MSS SP-97 (Bonney Forge) manufacturer body dims
-# Nipoflange: a forged branch-outlet fitting (same structural family as
-# weldolet/sockolet/threadolet) that terminates in an integral raised-face
-# flange rather than a weld bevel/socket/thread end. Kept under
-# PRODUCT_FAMILY_OLET (not a new top-level product family) because it is
-# engineering-equivalent to the other branch-outlet fitting types, only
-# the terminal end differs - exactly what fitting_type already exists to
-# distinguish. Data source: KAFCO's own Nipoflange catalog (manufacturer-
-# specific, not an MSS/ASME standard table) - see
-# adapters/kafco_nipoflange.py.
-FITTING_TYPE_NIPOFLANGE = "nipoflange"
 
 OLET_FITTING_TYPES = frozenset({
     FITTING_TYPE_WELDOLET_REDUCING, FITTING_TYPE_WELDOLET_FULL,
     FITTING_TYPE_WELDOLET, FITTING_TYPE_SOCKOLET, FITTING_TYPE_THREADOLET,
-    FITTING_TYPE_NIPOFLANGE,
 })
+
+# Nipoflange: initially (wrongly) classified here as an olet fitting_type,
+# on the assumption it was a branch-saddle fitting like weldolet/sockolet/
+# threadolet. Corrected after the user supplied a real WELSURE NIPOFLANGE
+# product photo: it is NOT a branch-outlet/saddle fitting at all - there
+# is no host run pipe. It is a B16.5 FLANGE with an integral (optionally
+# reducing) nipple, terminating in an ordinary bevelled weld-prep tip -
+# structurally a flange variant, not an olet. Now lives under
+# PRODUCT_FAMILY_FLANGE as a flange_type value (see
+# adapters/kafco_nipoflange.py) instead of PRODUCT_FAMILY_OLET/
+# fitting_type. Left OUT of OLET_FITTING_TYPES above on purpose.
+FLANGE_TYPE_NIPOFLANGE = "nipoflange"
 
 FITTING_TYPE_ELBOW_90_LR_JIS = "elbow_90_lr_jis"
 FITTING_TYPE_ELBOW_45_JIS = "elbow_45_jis"          # source does not split LR/SR for 45deg - one JIS 45deg identity
@@ -302,7 +303,8 @@ DIM_OLET_BASE_OUTSIDE_DIAMETER = "olet_base_outside_diameter_mm"  # source: C_ba
 DIM_OLET_BORE_DIAMETER = "olet_bore_diameter_mm"       # source: D_bore_mm
 DIM_OLET_SOCKET_DIAMETER = "olet_socket_diameter_mm"   # source: E_socketDia_mm (sockolet only)
 
-# Nipoflange-specific dimensions (KAFCO manufacturer catalog - see
+# Nipoflange-specific dimensions (KAFCO manufacturer catalog, product_family
+# = flange, flange_type = FLANGE_TYPE_NIPOFLANGE - see
 # adapters/kafco_nipoflange.py). Deliberately NOT reusing
 # DIM_OUTSIDE_DIAMETER/DIM_FLANGE_THICKNESS_OTHER_TYPES even though the
 # source states "flange dimensions to ANSI B16.5": that claim was not

@@ -78,6 +78,12 @@ FLANGE_SUBTYPE_ALIASES = {
     "LWN": "long_weld_neck", "LONG WELD NECK": "long_weld_neck", "LONG WELDNECK": "long_weld_neck",
     "LONG-WELD-NECK": "long_weld_neck", "LONG_WELD_NECK": "long_weld_neck", "STRAIGHT HUB": "long_weld_neck",
     "STRAIGHT HUB FLANGE": "long_weld_neck",
+    # Nipoflange: a B16.5 flange with an integral (optionally reducing)
+    # nipple - not a branch-outlet fitting (moved here from
+    # OLET_SUBTYPE_ALIASES after the real product photo confirmed there's
+    # no host run pipe / saddle involved - see adapters/kafco_nipoflange.py).
+    "NIPOFLANGE": VOC.FLANGE_TYPE_NIPOFLANGE, "NIPO FLANGE": VOC.FLANGE_TYPE_NIPOFLANGE,
+    "NIPPOFLANGE": VOC.FLANGE_TYPE_NIPOFLANGE,
 }
 
 BUTTWELD_SUBTYPE_ALIASES = {
@@ -104,8 +110,8 @@ OLET_SUBTYPE_ALIASES = {
     "WELDOLET": VOC.FITTING_TYPE_WELDOLET, "SOCKOLET": VOC.FITTING_TYPE_SOCKOLET,
     "THREADOLET": VOC.FITTING_TYPE_THREADOLET,
     "WELDOLET REDUCING": VOC.FITTING_TYPE_WELDOLET_REDUCING, "WELDOLET FULL": VOC.FITTING_TYPE_WELDOLET_FULL,
-    "NIPOFLANGE": VOC.FITTING_TYPE_NIPOFLANGE, "NIPO FLANGE": VOC.FITTING_TYPE_NIPOFLANGE,
-    "NIPOLET FLANGE": VOC.FITTING_TYPE_NIPOFLANGE,
+    # Nipoflange REMOVED from here (2026-07-20) - it is not a branch-outlet
+    # fitting; see FLANGE_SUBTYPE_ALIASES above and adapters/kafco_nipoflange.py.
 }
 
 _SUBTYPE_ALIASES_BY_FAMILY = {

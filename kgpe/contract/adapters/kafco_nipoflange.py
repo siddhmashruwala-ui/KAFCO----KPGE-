@@ -2,18 +2,30 @@
 """
 kgpe.contract.adapters.kafco_nipoflange
 ===========================================
-Source adapter: KAFCO's own Nipoflange product datasheet (a forged
-branch-outlet fitting terminating in an integral raised-face flange,
-Branch NB 1/2"-2", ANSI classes 150#-2500#).
+Source adapter: KAFCO's own Nipoflange product datasheet - a B16.5 FLANGE
+with an integral (optionally reducing) nipple, Branch NB 1/2"-2", ANSI
+classes 150#-2500#.
 
-WHY THIS EXISTS: prior KGPE work (mss_sp97_olets.py's own docstring, and
-model.py's ConstructionParameter docstring) explicitly flagged that the
-legacy CRM's nipoflange geometry was a hand-rolled *proportional*
-construction with no standard/manufacturer data behind it, and
-deliberately refused to ingest that construction as authoritative. This
-adapter is the first genuine primary source for Nipoflange dimensions -
-a real KAFCO catalog page, transcribed verbatim, not derived from the
-CRM's JS.
+CLASSIFICATION CORRECTED (2026-07-20): this adapter originally classified
+Nipoflange as product_family=olet / fitting_type=nipoflange, on the
+assumption it was a branch-saddle fitting structurally like weldolet/
+sockolet/threadolet. The user then supplied a real WELSURE NIPOFLANGE
+product photo, which shows plainly: there is no host run pipe and no
+saddle. It's a flange with a straight (or reducing) nipple rising from
+its center, ending in an ordinary bevelled weld-prep tip - a flange
+variant, not a branch outlet. Now classified as product_family=flange,
+flange_type=VOC.FLANGE_TYPE_NIPOFLANGE. See KAFCO_CRM_Dashboard.html's
+holoBuildModel nipoflange branch for the corresponding 3D-geometry fix
+made at the same time.
+
+WHY THIS ADAPTER EXISTS: prior KGPE work (mss_sp97_olets.py's own
+docstring, and model.py's ConstructionParameter docstring) explicitly
+flagged that the legacy CRM's nipoflange geometry was a hand-rolled
+*proportional* construction with no standard/manufacturer data behind it,
+and deliberately refused to ingest that construction as authoritative.
+This adapter is the first genuine primary source for Nipoflange
+dimensions - a real KAFCO catalog page, transcribed verbatim, not derived
+from the CRM's JS.
 
 SOURCE CHARACTER (read from the source's own notes, not assumed):
   - "Flange dimensions to ANSI B16.5" (source Note 1) - stated but NOT
@@ -117,8 +129,8 @@ def _build_row_facts(row):
     dn = normalize_dn(row["BranchDN"]) if "BranchDN" in row and row["BranchDN"] is not None else None
 
     applicability = Applicability(
-        product_family=VOC.PRODUCT_FAMILY_OLET, standard=STANDARD_ID,
-        fitting_type=VOC.FITTING_TYPE_NIPOFLANGE, class_key=class_key, nps=nps, dn=dn,
+        product_family=VOC.PRODUCT_FAMILY_FLANGE, standard=STANDARD_ID,
+        flange_type=VOC.FLANGE_TYPE_NIPOFLANGE, class_key=class_key, nps=nps, dn=dn,
         manufacturer_profile=MANUFACTURER_PROFILE,
     )
 
@@ -150,8 +162,8 @@ def _build_row_construction_param(row):
     nps = normalize_nps(row["BranchNPS"])
     dn = normalize_dn(row["BranchDN"]) if "BranchDN" in row and row["BranchDN"] is not None else None
     applicability = Applicability(
-        product_family=VOC.PRODUCT_FAMILY_OLET, standard=STANDARD_ID,
-        fitting_type=VOC.FITTING_TYPE_NIPOFLANGE, class_key=class_key, nps=nps, dn=dn,
+        product_family=VOC.PRODUCT_FAMILY_FLANGE, standard=STANDARD_ID,
+        flange_type=VOC.FLANGE_TYPE_NIPOFLANGE, class_key=class_key, nps=nps, dn=dn,
         manufacturer_profile=MANUFACTURER_PROFILE,
     )
     return ConstructionParameter(
