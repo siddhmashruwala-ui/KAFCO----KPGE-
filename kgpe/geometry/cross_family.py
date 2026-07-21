@@ -256,3 +256,63 @@ class SocketweldBodyOutsideDiameterViaPipeRule(CrossFamilyDependencyRule):
         )
         return ConstructionRuleOutcome(ConstructionRuleStatus.RULE_APPLIED, self.rule_id, self.rule_version,
                                         value=cv, detail="Applied via cross-family pipe-OD reference.")
+
+
+class NipoflangeNeckODViaBranchPipeODRule(CrossFamilyDependencyRule):
+    """2026-07-21 (nipoflange product generator): the KAFCO Nipoflange
+    catalog publishes NO neck/nipple OD of its own - the nipple is, by
+    the product's function, a stub that buttwelds to branch pipe of the
+    stated Branch NB, so its barrel OD equals that pipe size's OD.
+    Derived via the EngineeringResolver public interface only, reusing
+    the exact od_req pattern of SocketweldBodyOutsideDiameterViaPipeRule.
+    NPS-only (the KAFCO source tabulates Branch NB in NPS) - any other
+    size system is RULE_NOT_APPLICABLE, never converted.
+
+    pipe_standard: the KAFCO source states the nipple is supplied in
+    ASME-dimensioned pipe sizes; DEFAULT_PIPE_STANDARD='ASME_B36.10M' is
+    this rule's own DECLARED, versioned engineering decision (recorded
+    here, not silently guessed at a call site) - a caller may still pass
+    a different explicit pipe_standard. Used for both the main-barrel
+    (branch NB) OD and, on reducing items, the reduced tip OD."""
+    rule_id = "nipoflange_neck_od_via_branch_pipe_od"
+    rule_version = "1"
+    DEFAULT_PIPE_STANDARD = "ASME_B36.10M"
+
+    def resolve(self, resolver, target_size_system, target_size, pipe_standard=None, value_name="neck_outside_diameter_mm"):
+        from ..resolver import EngineeringRequest, ResolutionStatus
+
+        pipe_standard = pipe_standard or self.DEFAULT_PIPE_STANDARD
+        if target_size_system != "nps":
+            return ConstructionRuleOutcome(
+                ConstructionRuleStatus.RULE_NOT_APPLICABLE, self.rule_id, self.rule_version,
+                detail=f"KAFCO Nipoflange Branch NB is NPS-only - target_size_system="
+                       f"{target_size_system!r} is not eligible (no implicit conversion).")
+        od_req = EngineeringRequest(product_family="pipe", standard=pipe_standard, primary_size=target_size,
+                                     dimensions=["outside_diameter_mm"])
+        od_resolved = resolver.resolve(od_req)
+        if od_resolved.status == ResolutionStatus.QUARANTINED_ENGINEERING_DATA:
+            return ConstructionRuleOutcome(
+                ConstructionRuleStatus.RULE_BLOCKED_QUARANTINE, self.rule_id, self.rule_version,
+                detail=f"Branch pipe outside_diameter_mm is quarantined: {od_resolved.quarantine_details}")
+        if od_resolved.status != ResolutionStatus.RESOLVED:
+            return ConstructionRuleOutcome(
+                ConstructionRuleStatus.RULE_INPUT_MISSING, self.rule_id, self.rule_version,
+                detail=f"Branch pipe ({pipe_standard} NPS{target_size}) outside_diameter_mm did not "
+                       f"resolve: status={od_resolved.status}")
+
+        od_entry = od_resolved.resolved_dimensions["outside_diameter_mm"]
+        from .construction_value import ConstructionValue
+        cv = ConstructionValue(
+            name=value_name, value=float(od_entry["value"]), unit=od_entry["unit"],
+            rule_id=self.rule_id, rule_version=self.rule_version,
+            input_dimension_refs=[{"name": "outside_diameter_mm", "value": od_entry["value"],
+                                    "unit": od_entry["unit"], "source_ref": {
+                                        "product_family": "pipe", "standard": pipe_standard,
+                                        "nps": target_size, "source_file": od_entry.get("source_file")}}],
+            derivation_trace=[
+                f"cross-family: target=flange(KAFCO_NIPOFLANGE NPS{target_size}) <- "
+                f"source=pipe({pipe_standard} NPS{target_size}) - nipple barrel OD equals the branch "
+                f"pipe size's own OD (the KAFCO source publishes no nipple OD of its own)."],
+        )
+        return ConstructionRuleOutcome(ConstructionRuleStatus.RULE_APPLIED, self.rule_id, self.rule_version,
+                                        value=cv, detail="Applied via cross-family branch-pipe-OD reference.")

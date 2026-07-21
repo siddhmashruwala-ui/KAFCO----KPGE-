@@ -74,6 +74,30 @@ def run_pipeline(request, resolver=None, generation_parameters=None, product_kwa
             failed_stage=prep.failed_stage,
         )
 
+    # 2026-07-21 (nipoflange product generator): pipeline-level derivation
+    # of construction inputs for compound products. The kernel never
+    # resolves anything itself, and callers (CRM bridge) never perform
+    # engineering - so declared cross-family/construction-parameter inputs
+    # are derived HERE, through versioned rules with full provenance
+    # (kgpe.geometry.nipoflange_inputs). Caller-supplied product_kwargs
+    # always win; a failed derivation leaves the kwarg absent and the
+    # builder fails closed (CONSTRUCTION_RULE_UNAVAILABLE), never invents.
+    if prep.geometry_specification.geometry_profile_id == "flange_nipoflange":
+        pk = dict(product_kwargs or {})
+        # "reduced_tip_size" is a RAW per-order input (the customer's
+        # "REDUCED TO <size>" callout) - popped here and resolved into an
+        # already-resolved tip_od_value ConstructionValue, so the kernel
+        # only ever receives resolved inputs (its documented contract).
+        reduced_tip_size = pk.pop("reduced_tip_size", None)
+        if resolver is not None:
+            from .nipoflange_inputs import derive_nipoflange_product_kwargs
+            derived = derive_nipoflange_product_kwargs(
+                request, prep.geometry_specification, resolver, reduced_tip_size=reduced_tip_size)
+            merged = dict(derived)
+            merged.update(pk)
+            pk = merged
+        product_kwargs = pk
+
     geometry_result = GeometryKernel().generate(prep.geometry_specification, generation_parameters, product_kwargs)
     failed_stage = None if geometry_result.is_generated() else PipelineStage.GEOMETRY_GENERATION
 

@@ -79,6 +79,16 @@ class TopologyRepresentation:
         "HOLLOW_ANNULAR_BODY_WITH_HUB_COMPOSITE_NO_BOOLEAN_CUT"
     SOLID_EXTERNAL_ENVELOPE_WITH_HUB_COMPOSITE_NO_BOOLEAN_CUT = \
         "SOLID_EXTERNAL_ENVELOPE_WITH_HUB_COMPOSITE_NO_BOOLEAN_CUT"
+    # 2026-07-21 (nipoflange product generator): a single continuous
+    # revolved solid built from a construction-derived profile (flange
+    # disc + hub fillet + barrel [+ reducing transition + weldolet outlet
+    # body] + weld bevel, per kgpe.geometry.transition_rules.
+    # NipoflangeNeckAllocationRule), closed with honest flat discs at
+    # both ends. No bore is modeled (purchaser-specified per the KAFCO
+    # source's own Note 4 - never fabricated) and no boolean cuts are
+    # performed anywhere.
+    SOLID_REVOLVED_COMPOSITE_CONSTRUCTION_ENVELOPE_NO_BOOLEAN_CUT = \
+        "SOLID_REVOLVED_COMPOSITE_CONSTRUCTION_ENVELOPE_NO_BOOLEAN_CUT"
 
 
 ALL_TOPOLOGY_REPRESENTATIONS = frozenset({
@@ -92,6 +102,7 @@ ALL_TOPOLOGY_REPRESENTATIONS = frozenset({
     TopologyRepresentation.CONSTRUCTION_DERIVED_ENVELOPE_WITH_INTERFACE_METADATA_NO_BOOLEAN_CUT,
     TopologyRepresentation.HOLLOW_ANNULAR_BODY_WITH_HUB_COMPOSITE_NO_BOOLEAN_CUT,
     TopologyRepresentation.SOLID_EXTERNAL_ENVELOPE_WITH_HUB_COMPOSITE_NO_BOOLEAN_CUT,
+    TopologyRepresentation.SOLID_REVOLVED_COMPOSITE_CONSTRUCTION_ENVELOPE_NO_BOOLEAN_CUT,
 })
 
 

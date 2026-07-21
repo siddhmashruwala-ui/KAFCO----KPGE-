@@ -64,6 +64,68 @@ class ConcentricReducerTransitionRule:
         return large_radius + (small_radius - large_radius) * t
 
 
+class NipoflangeNeckAllocationRule:
+    """2026-07-21 (CRM production audit): versioned construction rule for
+    the KAFCO Nipoflange's neck geometry - the continuous flange-to-weld-
+    end contour that NO source tabulates. The KAFCO catalog publishes only
+    Flange OD (A), Overall Length (B - purchaser-modifiable per source
+    Note 2) and Flange THK (D); the customer explicitly left the height of
+    the OD transition to KAFCO (recorded per Siddh, 2026-07-20). This rule
+    therefore fixes a deterministic allocation of the available neck
+    envelope E = B - D, mirroring (and now owning, as the single
+    engineering authority) the split the CRM's reference-photo-validated
+    heuristic already used:
+
+      REDUCING (integral reduced weldolet outlet at the tip):
+        28% hub fillet / 12% straight full-size barrel / 22% reducing
+        transition / 28% reduced outlet (weldolet) body / 10% weld bevel.
+      NON-REDUCING (full, size-on-size):
+        30% hub fillet / 60% straight barrel / 10% weld bevel.
+
+    Radial construction defaults (same provenance - deterministic shop-
+    practice proportions, never claimed as published dimensions):
+      hub fillet base OD  = min(0.58 x flange OD, 2.2 x neck OD)
+      weldolet base OD    = min(1.5 x tip OD, 0.92 x neck OD)  (reducing only)
+      weld-prep tip OD    = 0.62 x end OD (the honest flat-closure edge,
+                            same policy as CapProfileConstructionRule)."""
+    rule_id = "nipoflange_neck_envelope_allocation"
+    rule_version = "1"
+    is_exact_engineering_envelope = False
+    description = ("Deterministic allocation of the Nipoflange neck envelope (overall length minus "
+                   "flange thickness) across hub fillet / barrel / reducing transition / weldolet "
+                   "outlet / weld bevel - a construction default for a contour no standard or "
+                   "manufacturer table publishes, never a source-published dimension.")
+
+    REDUCING_SPLIT = {"hub_fillet": 0.28, "barrel": 0.12, "transition": 0.22,
+                       "outlet_body": 0.28, "weld_bevel": 0.10}
+    STRAIGHT_SPLIT = {"hub_fillet": 0.30, "barrel": 0.60, "weld_bevel": 0.10}
+    HUB_BASE_FLANGE_OD_FACTOR = 0.58
+    HUB_BASE_NECK_OD_FACTOR = 2.2
+    OLET_BASE_TIP_OD_FACTOR = 1.5
+    OLET_BASE_NECK_OD_FACTOR = 0.92
+    WELD_PREP_TIP_FACTOR = 0.62
+
+    def allocate(self, overall_length_mm, flange_thickness_mm, reducing):
+        """Returns {section_name: length_mm} for the neck above the flange
+        top face. Raises ValueError when the envelope is non-positive -
+        fail-closed, never a fabricated minimum."""
+        envelope = overall_length_mm - flange_thickness_mm
+        if envelope <= 0.0:
+            raise ValueError(
+                f"Nipoflange neck envelope must be positive: overall_length_mm={overall_length_mm!r} "
+                f"- flange_thickness_mm={flange_thickness_mm!r} = {envelope!r}")
+        split = self.REDUCING_SPLIT if reducing else self.STRAIGHT_SPLIT
+        return {name: envelope * fraction for name, fraction in split.items()}
+
+    def hub_base_od(self, flange_od_mm, neck_od_mm):
+        return min(self.HUB_BASE_FLANGE_OD_FACTOR * flange_od_mm,
+                   self.HUB_BASE_NECK_OD_FACTOR * neck_od_mm)
+
+    def outlet_base_od(self, tip_od_mm, neck_od_mm):
+        return min(self.OLET_BASE_TIP_OD_FACTOR * tip_od_mm,
+                   self.OLET_BASE_NECK_OD_FACTOR * neck_od_mm)
+
+
 class EccentricReducerOffsetRule:
     """Sec.24-25: defines the eccentric reducer's centreline-offset
     construction. Kernel default orientation is FLAT_ON_BOTTOM (documented

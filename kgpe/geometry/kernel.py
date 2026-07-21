@@ -28,6 +28,7 @@ from .products import socketweld_elbow_tee as socketweld_elbow_tee_product
 from .products import socketweld_coupling as socketweld_coupling_product
 from .products import socketweld_cap as socketweld_cap_product
 from .products import olet as olet_product
+from .products import nipoflange as nipoflange_product
 
 # Prompt 13 Sec.32/Prompt 14 Sec.35: expanded ONLY for successfully
 # implemented and validated product profiles - reducer_concentric/
@@ -73,6 +74,13 @@ _PRODUCT_DISPATCH = {
     "socketweld_coupling": socketweld_coupling_product,
     "socketweld_cap": socketweld_cap_product,
     "olet_body": olet_product,
+    # 2026-07-21: nipoflange product generator (CRM production audit) -
+    # the profile existed at spec level since the 2026-07-20
+    # reclassification but had no registered builder, so every nipoflange
+    # request honestly returned UNSUPPORTED_GEOMETRY_PROFILE and the CRM
+    # hologram silently used its own heuristic. See
+    # kgpe.geometry.products.nipoflange + kgpe.geometry.nipoflange_inputs.
+    "flange_nipoflange": nipoflange_product,
 }
 
 
