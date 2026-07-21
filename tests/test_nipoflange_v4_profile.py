@@ -15,6 +15,7 @@ from kgpe.contract.snapshot import registry_fingerprint
 from kgpe.resolver import EngineeringResolver, EngineeringRequest
 from kgpe.geometry.pipeline import run_pipeline
 from kgpe.geometry.transition_rules import NipoflangeNeckAllocationRule
+from kgpe.geometry.cross_family import FlangeBoreViaPipeScheduleRule
 
 A, B, D = 152.0, 150.0, 19.0
 NECK, OUTLET, BORE = 60.3, 33.4, 20.7
@@ -155,9 +156,18 @@ class NipoflangeV4ProfileTests(unittest.TestCase):
 
     # ---------------- R5 bore + weld prep ----------------
     def test_R5_bore_and_weld_prep(self):
+        # 2026-07-21 dual-bore correction: this identity is a REDUCING
+        # nipoflange (2" flange x 1" outlet), so the bore is only constant
+        # at 10.35mm from the reducing-taper end onward (the outlet-side
+        # region) - checked here. The flange-side/transition region (which
+        # carries the LARGER 2" flange bore) is covered separately by
+        # test_R8_reducing_dual_bore, so it is deliberately excluded from
+        # this range (was previously asserted constant end-to-end, which
+        # was the bug this correction fixes).
+        t1 = self.sec["taper_end_z"]
         inner = [(z, self.r_in_all[z]) for z in self.zs
-                  if 0.05 * B <= z <= 0.95 * B and self.r_in_all[z] < self.r_out[z] - 1e-6]
-        self.assertTrue(inner, "no inner (bore) rings found in [0.05B, 0.95B]")
+                  if t1 - 1e-6 <= z <= 0.95 * B and self.r_in_all[z] < self.r_out[z] - 1e-6]
+        self.assertTrue(inner, "no inner (bore) rings found in [taper_end_z, 0.95B]")
         for z, r in inner:
             self.assertAlmostEqual(r, 10.35, delta=0.1, msg=f"r_in at z={z} is {r}")
         self._log("R5.r_in_values", sorted({round(r, 3) for _z, r in inner}), "10.35 +/-0.1")
@@ -233,6 +243,87 @@ class NipoflangeV4ProfileTests(unittest.TestCase):
                               product_kwargs={"reduced_tip_size": "1", "bore_schedule": "Sch160"})
         self._log("R7.determinism", res_b.geometry_result.geometry_fingerprint == self.gr.geometry_fingerprint, "True")
         self.assertEqual(res_b.geometry_result.geometry_fingerprint, self.gr.geometry_fingerprint)
+
+    # ---------------- R8 reducing nipoflange dual bore (2026-07-21) ----------------
+    def test_R8_reducing_dual_bore(self):
+        """A 2"x1" reducing nipoflange must NOT have a single constant bore
+        end-to-end: the flange body + hub bore at the 2" flange ID, a
+        conical transition begins exactly at the Hub-to-Neck Transition
+        (hub taper end, z = D + hub length) and completes by the
+        reducing-taper end, and the outlet bores at the 1" ID thereafter.
+        Expected flange-side bore is derived independently via the SAME
+        cross-family rule the production pipeline uses (not a hardcoded
+        literal), so this is a wiring/correctness check, not a coincidence
+        check."""
+        expected_flange_bore = FlangeBoreViaPipeScheduleRule().resolve(
+            self.resolver, target_standard="KAFCO_NIPOFLANGE", target_size_system="nps",
+            target_size="2", pipe_standard="ASME_B36.10M", pipe_schedule="Sch160")
+        self.assertTrue(expected_flange_bore.is_applied())
+        flange_bore_r = expected_flange_bore.value.value / 2.0
+        self._log("R8.expected_flange_bore_dia", round(flange_bore_r * 2, 3), "derived via FlangeBoreViaPipeScheduleRule")
+        self.assertGreater(flange_bore_r, BORE / 2.0, "flange-side (2\") bore must be larger than outlet (1\") bore")
+
+        hub_end_z = D + self.sec["hub"]
+        taper_end_z = self.sec["taper_end_z"]
+
+        flange_side = [(z, self.r_in_all[z]) for z in self.zs
+                        if z <= hub_end_z + 1e-6 and self.r_in_all[z] < self.r_out[z] - 1e-6]
+        self.assertTrue(flange_side, "no inner rings found in the flange/hub region")
+        for z, r in flange_side:
+            self.assertAlmostEqual(r, flange_bore_r, delta=0.1, msg=f"flange-side r_in at z={z} is {r}")
+        self._log("R8.flange_side_r_in", sorted({round(r, 3) for _z, r in flange_side}),
+                   f"{flange_bore_r:.3f} +/-0.1")
+
+        transition = sorted((z, self.r_in_all[z]) for z in self.zs
+                              if hub_end_z - 1e-6 < z < taper_end_z + 1e-6
+                              and self.r_in_all[z] < self.r_out[z] - 1e-6)
+        radii = [r for _z, r in transition]
+        self._log("R8.transition_monotonic_decreasing", radii, "non-increasing, bounded by the two bores")
+        self.assertTrue(all(radii[i] >= radii[i + 1] - 1e-6 for i in range(len(radii) - 1)))
+        for r in radii:
+            self.assertLessEqual(r, flange_bore_r + 1e-6)
+            self.assertGreaterEqual(r, BORE / 2.0 - 1e-6)
+
+        outlet_side = [(z, self.r_in_all[z]) for z in self.zs
+                        if z >= taper_end_z - 1e-6 and self.r_in_all[z] < self.r_out[z] - 1e-6]
+        self.assertTrue(outlet_side, "no inner rings found in the outlet region")
+        for z, r in outlet_side:
+            self.assertAlmostEqual(r, BORE / 2.0, delta=0.1, msg=f"outlet-side r_in at z={z} is {r}")
+
+        meas = self.gp["measurements"]
+        self._log("R8.measurements", {"bore_diameter_mm": meas.get("bore_diameter_mm"),
+                                        "flange_bore_diameter_mm": meas.get("flange_bore_diameter_mm")},
+                   f"{{'bore_diameter_mm': {BORE:.1f}, 'flange_bore_diameter_mm': {flange_bore_r*2:.1f}}}")
+        self.assertAlmostEqual(meas["bore_diameter_mm"], BORE, delta=0.2)
+        self.assertIn("flange_bore_diameter_mm", meas)
+        self.assertAlmostEqual(meas["flange_bore_diameter_mm"], flange_bore_r * 2.0, delta=0.2)
+
+        feats = self.feats
+        self.assertIn("flange_bore_wall", feats)
+        self.assertIn("bore_transition_taper", feats)
+        self.assertIn("outlet_bore_wall", feats)
+        self.assertNotIn("bore_wall", feats, "single-region bore_wall feature should not appear for a dual-bore item")
+
+    # ---------------- R9 size-on-size regression (no behaviour change) ----------------
+    def test_R9_size_on_size_unchanged(self):
+        """A non-reducing (size-on-size) nipoflange must keep today's single
+        constant bore end-to-end and the original single "bore_wall"
+        feature - zero behaviour change from the dual-bore correction."""
+        res = run_pipeline(_req(), resolver=self.resolver, product_kwargs={"bore_schedule": "Sch160"})
+        gr = res.geometry_result
+        self.assertEqual(gr.generation_status, "GEOMETRY_GENERATED")
+        gp = gr.geometry_payload
+        zs, r_out, r_in = _envelope(gp["mesh"])
+        inner = [(z, r_in[z]) for z in zs if r_in[z] < r_out[z] - 1e-6]
+        self.assertTrue(inner)
+        radii = {round(r, 3) for _z, r in inner}
+        self._log("R9.r_in_values", sorted(radii), "single constant value")
+        self.assertEqual(len(radii), 1, "size-on-size bore must be a single constant radius")
+        feats = {f["name"]: f for f in gp["features"]}
+        self.assertIn("bore_wall", feats)
+        self.assertNotIn("flange_bore_wall", feats)
+        self.assertNotIn("bore_transition_taper", feats)
+        self.assertNotIn("flange_bore_diameter_mm", gp["measurements"])
 
 
 if __name__ == "__main__":

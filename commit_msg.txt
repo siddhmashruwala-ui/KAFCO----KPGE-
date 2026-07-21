@@ -1,0 +1,28 @@
+Reducing nipoflange: dual internal bore geometry
+
+Fixes the internal bore for a reducing nipoflange (e.g. 2 inch x 1 inch):
+previously the bore was a single constant radius end-to-end (the outlet
+size only), which is not how the part is manufactured.
+
+- nipoflange_inputs.py: derive a second flange-side bore ConstructionValue
+  (FlangeBoreViaPipeScheduleRule at the flange's own NPS) whenever the
+  item is genuinely reducing (outlet NPS != flange NPS).
+- products/nipoflange.py: bore radius is now piecewise - constant at the
+  flange-side ID through the flange body and hub, a linear conical
+  transition beginning exactly at the Hub-to-Neck Transition (hub taper
+  end) and completing at the reducing-taper end, constant at the
+  outlet-side ID thereafter. Uses the existing inner-ring z positions
+  (no new rings needed). Zero behavior change for non-reducing items.
+- New features when dual-bore: flange_bore_wall, bore_transition_taper,
+  outlet_bore_wall (replaces the single bore_wall feature only for
+  genuinely reducing items). New measurement: flange_bore_diameter_mm.
+  flange_mating_face port opening_diameter_mm now reports the correct
+  (flange-side) bore.
+- tests/test_nipoflange_v4_profile.py: new R8 (dual bore correctness,
+  cross-checked against the same cross-family rule the pipeline uses)
+  and R9 (size-on-size regression, unchanged) tests; R5 updated to only
+  assert the outlet-side bore in the outlet region.
+
+Full test suite: 781 tests, 13 failures / 4 errors - identical to the
+pre-existing baseline-count drift documented before this change (zero
+new failures).

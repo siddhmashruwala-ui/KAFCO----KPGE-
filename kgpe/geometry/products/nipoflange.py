@@ -51,7 +51,7 @@ def _feature(name, ftype, v0, v1, f0, f1, params=None):
 
 def build(geometry_spec, generation_parameters,
           overall_length_value=None, neck_od_value=None, tip_od_value=None,
-          bore_value=None, actual_overall_length_value=None):
+          bore_value=None, actual_overall_length_value=None, flange_bore_value=None):
     dims = geometry_spec.required_dimensions
     required = ("nipoflange_flange_od_mm", "nipoflange_flange_thickness_mm")
     missing = [k for k in required if k not in dims]
@@ -66,6 +66,16 @@ def build(geometry_spec, generation_parameters,
     reducing = tip_od_value is not None
     outlet_od = float(tip_od_value.value) if reducing else neck_od
     bore_dia = float(bore_value.value) if bore_value is not None else None
+    flange_bore_dia = float(flange_bore_value.value) if flange_bore_value is not None else None
+    # Reducing nipoflange dual bore (2026-07-21, per Siddh): a flange whose
+    # outlet NPS differs from its flange NPS bores through the flange body
+    # and hub at the LARGER (flange-side) ID, only reducing to the smaller
+    # (outlet-side) ID once past the Hub-to-Neck Transition - see the
+    # per-z bore-radius interpolation below. Only active when genuinely
+    # reducing and BOTH bores were actually derived; a size-on-size item
+    # (or one missing flange_bore_value) keeps today's single-radius bore
+    # unchanged.
+    dual_bore = reducing and bore_dia is not None and flange_bore_dia is not None
     b_actual = (float(actual_overall_length_value.value)
                  if actual_overall_length_value is not None else b_default)
     n = generation_parameters.radial_segments
@@ -80,6 +90,10 @@ def build(geometry_spec, generation_parameters,
     if bore_dia is not None and not (0.0 < bore_dia < outlet_od):
         raise GeometryInputError(
             f"bore diameter ({bore_dia!r}) must be positive and less than the outlet OD ({outlet_od!r}).")
+    if dual_bore and not (bore_dia < flange_bore_dia):
+        raise GeometryInputError(
+            f"flange-side bore ({flange_bore_dia!r}) must be larger than the outlet-side bore "
+            f"({bore_dia!r}) - a reducing nipoflange's flange NPS is always larger than its outlet NPS.")
 
     rule = NipoflangeNeckAllocationRule()
     try:
@@ -89,6 +103,12 @@ def build(geometry_spec, generation_parameters,
                                      extra_straight_mm=0.0 if reducing else sec["taper"])
     except ValueError as e:
         raise GeometryInputError(str(e))
+
+    if dual_bore and not (0.0 < flange_bore_dia < sec["hub_base_r"] * 2.0):
+        raise GeometryInputError(
+            f"flange-side bore ({flange_bore_dia!r}) must be positive and less than the hub base OD "
+            f"({sec['hub_base_r'] * 2.0!r}) so the bore wall stays solid at the narrowest flange-side "
+            f"point.")
 
     d = flange_thk
     hub_base_r, neck_r, outlet_r = sec["hub_base_r"], sec["neck_r"], sec["outlet_r"]
@@ -112,6 +132,14 @@ def build(geometry_spec, generation_parameters,
            (crown_r, crown_top),                          # P9 crown collar
            (bevel_r, b_actual)]                           # P10 weld bevel
 
+    # Hub-to-Neck Transition (Hub Taper End): the exact z where the hub
+    # cone ends and the reducing taper/straight neck begins - P3's z by
+    # construction. For a reducing nipoflange this is also where the
+    # internal bore begins its conical reduction from the flange-side ID
+    # to the outlet-side ID (2026-07-21, per Siddh: "the reduction must
+    # begin exactly at the point where the Hub Taper ends").
+    hub_end_z = d + sec["hub"]
+
     u, v, _axis = straight_axis_frame()
     mesh = Mesh()
     outer_rings = []
@@ -128,18 +156,44 @@ def build(geometry_spec, generation_parameters,
         band_ranges.append((f0, mesh.face_count()))
 
     inner_rings = []
+    inner_zs = []
+    hub_end_idx = None
+    taper_end_idx = None
     if bore_dia is not None:
         bore_r = bore_dia / 2.0
+        flange_bore_r = flange_bore_dia / 2.0 if dual_bore else None
+
+        def _bore_radius_at(z):
+            """Dual-bore rule (2026-07-21): constant flange_bore_r up to the
+            Hub-to-Neck Transition, linear conical interpolation to bore_r
+            by the reducing-taper end, constant bore_r thereafter. Reduces
+            to the original constant bore_r everywhere when not dual_bore -
+            zero behaviour change for standard (non-reducing) items."""
+            if flange_bore_r is None:
+                return bore_r
+            if z <= hub_end_z + 1e-9:
+                return flange_bore_r
+            if z >= taper_end_z - 1e-9:
+                return bore_r
+            frac = (z - hub_end_z) / (taper_end_z - hub_end_z)
+            return flange_bore_r + frac * (bore_r - flange_bore_r)
+
         # one inner ring per UNIQUE outer z (the outer profile repeats z at
         # the flange shoulder; duplicating the bore ring there would create
-        # a zero-area band and fail structural validation).
-        inner_zs = []
+        # a zero-area band and fail structural validation). P3's z (=
+        # hub_end_z) and P4's z (= taper_end_z) are already distinct entries
+        # here, so the transition's start/end rings fall out naturally -
+        # no extra rings are needed to carry the reduction.
         for _r, z in pts:
             if not inner_zs or abs(z - inner_zs[-1]) > 1e-9:
                 inner_zs.append(z)
-        for z in inner_zs:
+        for idx, z in enumerate(inner_zs):
+            if dual_bore and hub_end_idx is None and abs(z - hub_end_z) < 1e-9:
+                hub_end_idx = idx
+            if dual_bore and abs(z - taper_end_z) < 1e-9:
+                taper_end_idx = idx
             inner_rings.append(mesh.vertex_count())
-            mesh.add_vertices(circle_ring((0.0, 0.0, z), u, v, bore_r, n))
+            mesh.add_vertices(circle_ring((0.0, 0.0, z), u, v, _bore_radius_at(z), n))
         fb0 = mesh.face_count()
         for k in range(len(inner_rings) - 1):
             a, b = inner_rings[k], inner_rings[k + 1]
@@ -204,10 +258,35 @@ def build(geometry_spec, generation_parameters,
     ]
     if bore_dia is not None:
         _k, fb0, fb1, fc0, fc1, fc2 = closure_info
-        features.append(_feature("bore_wall", "swept_inner_void",
-                                   inner_rings[0], inner_rings[-1] + n - 1, fb0, fb1,
-                                   {"radius_mm": bore_dia / 2.0, "length_mm": b_actual,
-                                    "source": f"{bore_value.rule_id} v{bore_value.rule_version}"}))
+        if dual_bore and hub_end_idx is not None and taper_end_idx is not None and hub_end_idx < taper_end_idx:
+            features.append(_feature("flange_bore_wall", "swept_inner_void",
+                                       inner_rings[0], inner_rings[hub_end_idx] + n - 1,
+                                       fb0, fb0 + hub_end_idx * n,
+                                       {"radius_mm": flange_bore_dia / 2.0, "length_mm": hub_end_z,
+                                        "source": f"{flange_bore_value.rule_id} v{flange_bore_value.rule_version}",
+                                        "note": "Flange-side bore - constant through the flange body and "
+                                                 "hub; ends at the Hub-to-Neck Transition."}))
+            features.append(_feature("bore_transition_taper", "construction_bore_taper",
+                                       inner_rings[hub_end_idx], inner_rings[taper_end_idx] + n - 1,
+                                       fb0 + hub_end_idx * n, fb0 + taper_end_idx * n,
+                                       {"from_radius_mm": flange_bore_dia / 2.0, "to_radius_mm": bore_dia / 2.0,
+                                        "start_z_mm": hub_end_z, "end_z_mm": taper_end_z,
+                                        "note": "Conical internal bore reduction from the flange-side ID "
+                                                 "to the outlet-side ID, beginning exactly at the "
+                                                 "Hub-to-Neck Transition (Hub Taper End) and completing at "
+                                                 "the reducing-taper end."}))
+            features.append(_feature("outlet_bore_wall", "swept_inner_void",
+                                       inner_rings[taper_end_idx], inner_rings[-1] + n - 1,
+                                       fb0 + taper_end_idx * n, fb1,
+                                       {"radius_mm": bore_dia / 2.0, "length_mm": b_actual - taper_end_z,
+                                        "source": f"{bore_value.rule_id} v{bore_value.rule_version}",
+                                        "note": "Outlet-side bore - constant through the straight neck "
+                                                 "and outlet."}))
+        else:
+            features.append(_feature("bore_wall", "swept_inner_void",
+                                       inner_rings[0], inner_rings[-1] + n - 1, fb0, fb1,
+                                       {"radius_mm": bore_dia / 2.0, "length_mm": b_actual,
+                                        "source": f"{bore_value.rule_id} v{bore_value.rule_version}"}))
         features.append(_feature("mating_face_closure", "annular_end_cap",
                                    outer_rings[0], inner_rings[0] + n - 1, fc0, fc1, {"z_mm": 0.0}))
         features.append(_feature("weld_end_closure", "annular_end_cap",
@@ -242,6 +321,8 @@ def build(geometry_spec, generation_parameters,
         construction_values.append(tip_od_value)
     if bore_value is not None:
         construction_values.append(bore_value)
+    if flange_bore_value is not None:
+        construction_values.append(flange_bore_value)
     if actual_overall_length_value is not None:
         construction_values.append(actual_overall_length_value)
 
@@ -266,8 +347,16 @@ def build(geometry_spec, generation_parameters,
         "crown_outside_diameter_mm": crown_r * 2.0,
     }
     if bore_dia is not None:
-        measurements["bore_diameter_mm"] = ring_radius(inner_rings[0])
+        # bore_diameter_mm reports the OUTLET/weld-end bore (matches the
+        # "weld_end" port's opening_diameter_mm below); for a size-on-size
+        # item every inner ring shares one radius so this is unchanged from
+        # before. For a dual-bore item the flange-side ring at inner_rings[0]
+        # is a DIFFERENT (larger) diameter - reported separately below.
+        measurements["bore_diameter_mm"] = ring_radius(inner_rings[-1])
         expected["bore_diameter_mm"] = bore_dia
+        if dual_bore:
+            measurements["flange_bore_diameter_mm"] = ring_radius(inner_rings[0])
+            expected["flange_bore_diameter_mm"] = flange_bore_dia
 
     identity = geometry_spec.engineering_object_identity or {}
     size_identity = {k: identity.get(k) for k in ("size_system", "primary_size")}
@@ -275,7 +364,7 @@ def build(geometry_spec, generation_parameters,
         ConnectionPort(port_id="flange_mating_face", role="flange_mating_face",
                         position=(0.0, 0.0, 0.0), direction=(0.0, 0.0, -1.0),
                         size_identity=size_identity,
-                        opening_diameter_mm=bore_dia,
+                        opening_diameter_mm=(flange_bore_dia if dual_bore else bore_dia),
                         opening_diameter_provenance=(OPENING_DIAMETER_PROVENANCE_DERIVED
                                                       if bore_dia is not None else
                                                       OPENING_DIAMETER_PROVENANCE_NOT_MODELED)),
@@ -299,6 +388,13 @@ def build(geometry_spec, generation_parameters,
         f"undercut={uc_len:.2f}mm, crown OD={crown_r*2:.2f}mm x {crown_len:.2f}mm, "
         f"bevel {rule.BEVEL_ANGLE_DEG}deg x {bevel_len:.2f}mm -> r={bevel_r:.2f}mm.",
     ]
+    if dual_bore:
+        trace.append(
+            f"{GEOMETRY_TYPE} v4 (reducing nipoflange dual bore): flange-side bore ID={flange_bore_dia}mm "
+            f"({flange_bore_value.rule_id} v{flange_bore_value.rule_version}) constant through the flange "
+            f"and hub to z={hub_end_z:.2f}mm (Hub-to-Neck Transition), conical reduction to outlet-side "
+            f"bore ID={bore_dia}mm complete by z={taper_end_z:.2f}mm (reducing-taper end), constant "
+            f"thereafter through the straight neck and outlet.")
 
     topology = (TopologyRepresentation.HOLLOW_REVOLVED_COMPOSITE_CONSTRUCTION_ENVELOPE_NO_BOOLEAN_CUT
                  if bore_dia is not None else

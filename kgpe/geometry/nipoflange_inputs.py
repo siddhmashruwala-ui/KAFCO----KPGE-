@@ -92,6 +92,27 @@ def derive_nipoflange_product_kwargs(request, geometry_specification, resolver, 
         if bore_outcome.is_applied():
             derived["bore_value"] = bore_outcome.value
 
+        # Reducing nipoflange dual bore (2026-07-21, per Siddh): a genuinely
+        # reducing item (outlet_nps != primary_size, i.e. reduced_tip_size
+        # was supplied and normalized to a smaller NPS) has a FLANGE-side
+        # bore that is the flange's OWN (larger) size's branch-pipe ID, not
+        # the outlet's - e.g. a 2"x1" reducing nipoflange bores through the
+        # flange and hub at the 2" ID, only stepping down to the 1" ID after
+        # the Hub-to-Neck Transition (kgpe.geometry.products.nipoflange
+        # builds the actual conical transition; this only derives the
+        # second, flange-side ConstructionValue). Same schedule as the
+        # outlet (the KAFCO source states one schedule per order; only the
+        # NPS differs between the two ends) - never a separate/default
+        # schedule. Never derived for a size-on-size item, where it would
+        # just duplicate bore_value.
+        if outlet_nps != primary_size:
+            flange_bore_rule = FlangeBoreViaPipeScheduleRule()
+            flange_bore_outcome = flange_bore_rule.resolve(
+                resolver, target_standard="KAFCO_NIPOFLANGE", target_size_system="nps",
+                target_size=primary_size, pipe_standard=_BORE_PIPE_STANDARD, pipe_schedule=schedule)
+            if flange_bore_outcome.is_applied():
+                derived["flange_bore_value"] = flange_bore_outcome.value
+
     # Purchaser-trimmed overall length (Note 2): a raw mm override supplied
     # per order; wrapped as a provenance-carrying ConstructionValue. The
     # catalog-default overall_length_value below stays untouched - it fixes
