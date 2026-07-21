@@ -221,7 +221,16 @@ def build(geometry_spec, generation_parameters,
                       "params": {"z_mm": overall_length}})
 
     # ---- construction values (provenance-carrying inputs + this rule) ----
-    construction_values = [overall_length_value, neck_od_value]
+    from ..construction_value import ConstructionValue
+    allocation_cv = ConstructionValue(
+        name="nipoflange_neck_envelope_mm", value=overall_length - flange_thk, unit="mm",
+        rule_id=rule.rule_id, rule_version=rule.rule_version,
+        derivation_trace=[
+            "Neck envelope = overall length B - flange thickness D; allocated across "
+            + ", ".join(f"{k} {v:.2f}mm" for k, v in sections.items())
+            + f" per {rule.rule_id} v{rule.rule_version} (construction geometry, not source-published)."],
+    )
+    construction_values = [overall_length_value, neck_od_value, allocation_cv]
     if reducing:
         construction_values.append(tip_od_value)
 
