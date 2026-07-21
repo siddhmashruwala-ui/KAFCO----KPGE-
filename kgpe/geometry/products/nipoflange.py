@@ -166,10 +166,14 @@ def build(geometry_spec, generation_parameters,
             r = neck_od / 2.0 + (outlet_base_od / 2.0 - neck_od / 2.0) * _ease(t, _TRANSITION_EASE_EXPONENT)
             profile.append((max(r, 0.1), z + trans_l * t))
         z += trans_l
-        # weldolet outlet body: linear frustum from the reinforced base down
-        # to the tip OD (the same honest linear-taper policy as
-        # ConcentricReducerTransitionRule - no published contour exists).
-        z += sections["outlet_body"]
+        # weldolet FLANK: linear frustum from the reinforced base down to
+        # the outlet OD (the same honest linear-taper policy as
+        # ConcentricReducerTransitionRule - no published contour exists) -
+        # then a STRAIGHT outlet stub at the reduced OD (rule v3: the
+        # dominant reduced-size section a real weldolet lands on).
+        z += sections["olet_flank"]
+        profile.append((tip_od / 2.0, z))
+        z += sections["outlet_stub"]
         profile.append((tip_od / 2.0, z))
     z += sections["weld_bevel"]
     profile.append((bevel_tip_od / 2.0, z))
@@ -205,8 +209,12 @@ def build(geometry_spec, generation_parameters,
         features.append(band_feature("weldolet_outlet_body", "construction_frustum",
                                       next_band, next_band,
                                       {"base_od_mm": outlet_base_od, "tip_od_mm": tip_od,
-                                       "length_mm": sections["outlet_body"], "rule_id": rule.rule_id}))
-        next_band += 1
+                                       "length_mm": sections["olet_flank"], "rule_id": rule.rule_id}))
+        features.append(band_feature("reduced_outlet_stub", "revolved_outer_profile",
+                                      next_band + 1, next_band + 1,
+                                      {"radius_mm": tip_od / 2.0,
+                                       "length_mm": sections["outlet_stub"], "rule_id": rule.rule_id}))
+        next_band += 2
     features.append(band_feature("weld_prep_bevel", "construction_bevel", next_band, next_band,
                                   {"end_od_mm": tip_od, "bevel_tip_od_mm": bevel_tip_od,
                                    "length_mm": sections["weld_bevel"], "rule_id": rule.rule_id}))

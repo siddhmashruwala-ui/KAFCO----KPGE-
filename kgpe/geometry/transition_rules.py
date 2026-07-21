@@ -78,22 +78,29 @@ class NipoflangeNeckAllocationRule:
 
       REDUCING (integral reduced weldolet outlet at the tip):
         12% hub fillet / 36% straight full-size barrel / 12% reducing
-        transition / 28% reduced outlet (weldolet) body / 12% weld bevel.
+        transition / 12% weldolet flank (base -> outlet OD) /
+        23% STRAIGHT reduced outlet stub / 5% weld bevel.
       NON-REDUCING (full, size-on-size):
-        14% hub fillet / 74% straight barrel / 12% weld bevel.
+        14% hub fillet / 81% straight barrel / 5% weld bevel.
 
     VERSION 2 (2026-07-21, first-render audit): v1 carried over the CRM
     heuristic's 28/12/22/28/10 split, which gave the hub fillet 28% of
     the envelope from a very wide base (0.58 x flange OD) and left only
     12% straight barrel - the rendered neck read as one continuous CONE,
     contradicting the WELSURE reference photo (dominant straight barrel,
-    compact rounded shoulders). v2 makes the straight branch-size barrel
-    the dominant section (36%), halves the fillet share and narrows its
-    base, keeping the same weldolet body share. Consequence: on a class150
-    2"x1" (B=150, D=19, envelope=131) the OD transition now starts ~62.9mm
-    above the flange face (~81.9mm from base) and ends ~78.6mm above it
-    (~97.6mm from base) - superseding v1's 52/71-81/100 figures on any
-    drawing that quoted them.
+    compact rounded shoulders). v2 made the barrel dominant (36%) and
+    narrowed the fillet base.
+    VERSION 3 (2026-07-21, second-render audit): v2's top half STILL read
+    as a nose-cone, because above the barrel the radius decreased
+    continuously (transition -> full-length outlet frustum -> an oversized
+    12% bevel) with NO straight reduced-size section anywhere. A real
+    weldolet lands on a straight outlet stub with a small field-weld
+    bevel. v3 splits the outlet into a compact weldolet FLANK (12%) plus
+    a dominant STRAIGHT outlet stub at the reduced OD (23%), and shrinks
+    the bevel to 5%. Consequence on a class150 2"x1" (B=150, D=19,
+    envelope=131): transition ~62.9-78.6mm above the flange face
+    (~81.9-97.6mm from base, unchanged from v2), weldolet flank ~15.7mm,
+    straight 1" stub ~30.1mm, bevel ~6.6mm.
 
     Radial construction defaults (same provenance - deterministic shop-
     practice proportions, never claimed as published dimensions):
@@ -102,7 +109,7 @@ class NipoflangeNeckAllocationRule:
       weld-prep tip OD    = 0.62 x end OD (the honest flat-closure edge,
                             same policy as CapProfileConstructionRule)."""
     rule_id = "nipoflange_neck_envelope_allocation"
-    rule_version = "2"
+    rule_version = "3"
     is_exact_engineering_envelope = False
     description = ("Deterministic allocation of the Nipoflange neck envelope (overall length minus "
                    "flange thickness) across hub fillet / barrel / reducing transition / weldolet "
@@ -110,8 +117,8 @@ class NipoflangeNeckAllocationRule:
                    "manufacturer table publishes, never a source-published dimension.")
 
     REDUCING_SPLIT = {"hub_fillet": 0.12, "barrel": 0.36, "transition": 0.12,
-                       "outlet_body": 0.28, "weld_bevel": 0.12}
-    STRAIGHT_SPLIT = {"hub_fillet": 0.14, "barrel": 0.74, "weld_bevel": 0.12}
+                       "olet_flank": 0.12, "outlet_stub": 0.23, "weld_bevel": 0.05}
+    STRAIGHT_SPLIT = {"hub_fillet": 0.14, "barrel": 0.81, "weld_bevel": 0.05}
     HUB_BASE_FLANGE_OD_FACTOR = 0.45
     HUB_BASE_NECK_OD_FACTOR = 1.3
     OLET_BASE_TIP_OD_FACTOR = 1.5
