@@ -76,74 +76,129 @@ class NipoflangeNeckAllocationRule:
     engineering authority for it - the heuristic now mirrors THESE
     numbers, not the other way around):
 
-      REDUCING (integral reduced weldolet outlet at the tip):
-        12% hub fillet / 36% straight full-size barrel / 12% reducing
-        transition / 12% weldolet flank (base -> outlet OD) /
-        23% STRAIGHT reduced outlet stub / 5% weld bevel.
-      NON-REDUCING (full, size-on-size):
-        14% hub fillet / 81% straight barrel / 5% weld bevel.
+    VERSION 4 (2026-07-21, catalog-fidelity audit). v1-v3 allocated the
+    neck as percentage splits of the ACTUAL envelope; the catalog section
+    drawing encodes a different design intent entirely:
+      - the reduction is an EARLY continuous taper starting right off a
+        short conical hub and ending ~45% of (B-D) up the neck;
+      - the rest of the length is a STRAIGHT run at the reduced/outlet OD
+        - the purchaser TRIM ZONE that makes source Note 2 ("Dimension B
+        can be modified") geometrically valid;
+      - the outlet ends in the olet CROWN (a collar slightly WIDER than
+        the stub, tool-relief undercut beneath it) and a genuine
+        B16.25-style weld prep (37.5deg bevel to bore ID + root face),
+        never a decorative flat cap.
+    CRITICAL v4 SEMANTICS: hub/taper/undercut/crown/bevel lengths are
+    computed from the CATALOG DEFAULT B of the identity's class/NB row
+    and stay FIXED in absolute mm; the straight outlet run =
+    B_actual - (fixed sections) absorbs ALL length variation.
 
-    VERSION 2 (2026-07-21, first-render audit): v1 carried over the CRM
-    heuristic's 28/12/22/28/10 split, which gave the hub fillet 28% of
-    the envelope from a very wide base (0.58 x flange OD) and left only
-    12% straight barrel - the rendered neck read as one continuous CONE,
-    contradicting the WELSURE reference photo (dominant straight barrel,
-    compact rounded shoulders). v2 made the barrel dominant (36%) and
-    narrowed the fillet base.
-    VERSION 3 (2026-07-21, second-render audit): v2's top half STILL read
-    as a nose-cone, because above the barrel the radius decreased
-    continuously (transition -> full-length outlet frustum -> an oversized
-    12% bevel) with NO straight reduced-size section anywhere. A real
-    weldolet lands on a straight outlet stub with a small field-weld
-    bevel. v3 splits the outlet into a compact weldolet FLANK (12%) plus
-    a dominant STRAIGHT outlet stub at the reduced OD (23%), and shrinks
-    the bevel to 5%. Consequence on a class150 2"x1" (B=150, D=19,
-    envelope=131): transition ~62.9-78.6mm above the flange face
-    (~81.9-97.6mm from base, unchanged from v2), weldolet flank ~15.7mm,
-    straight 1" stub ~30.1mm, bevel ~6.6mm.
+      profile (z up from mating face): flange (D) -> shoulder -> hub cone
+      (HUB_ANGLE_DEG) -> linear taper neck OD -> outlet OD, ending at
+      D + TAPER_END_FRACTION*(B_default - D) -> straight outlet stub ->
+      undercut relief -> crown collar -> weld bevel (with bore: bevel
+      lands at ID/2 + ROOT_FACE_MM at z = B_actual).
 
-    Radial construction defaults (same provenance - deterministic shop-
-    practice proportions, never claimed as published dimensions):
-      hub fillet base OD  = min(0.45 x flange OD, 1.3 x neck OD)
-      weldolet base OD    = min(1.5 x tip OD, 0.92 x neck OD)  (reducing only)
-      weld-prep tip OD    = 0.62 x end OD (the honest flat-closure edge,
-                            same policy as CapProfileConstructionRule)."""
+    All constants below are DECLARED, versioned construction defaults -
+    never claimed as source-published dimensions.
+
+    DOCUMENTED CLAMP (per the v4 spec's own infeasibility clause):
+    MIN_STUB was specified as 1.0 x outlet OD, but on the 2" rows that
+    makes the required 20%-trim capability (B=150 -> 120) infeasible
+    (120mm leaves a 15.9mm stub < 33.4mm). Clamped deterministically to
+    MIN_STUB_FACTOR = 0.45 x outlet OD, recorded here and covered by an
+    explicit fail-closed test at min_valid_overall_length() - 1."""
     rule_id = "nipoflange_neck_envelope_allocation"
-    rule_version = "3"
+    rule_version = "4"
     is_exact_engineering_envelope = False
-    description = ("Deterministic allocation of the Nipoflange neck envelope (overall length minus "
-                   "flange thickness) across hub fillet / barrel / reducing transition / weldolet "
-                   "outlet / weld bevel - a construction default for a contour no standard or "
-                   "manufacturer table publishes, never a source-published dimension.")
+    description = ("Catalog-faithful Nipoflange contour: early continuous taper, straight "
+                   "trimmable outlet run, olet crown + undercut, B16.25-style weld prep - a "
+                   "construction default for a contour no standard or manufacturer table "
+                   "publishes, never a source-published dimension.")
 
-    REDUCING_SPLIT = {"hub_fillet": 0.12, "barrel": 0.36, "transition": 0.12,
-                       "olet_flank": 0.12, "outlet_stub": 0.23, "weld_bevel": 0.05}
-    STRAIGHT_SPLIT = {"hub_fillet": 0.14, "barrel": 0.81, "weld_bevel": 0.05}
-    HUB_BASE_FLANGE_OD_FACTOR = 0.45
+    HUB_ANGLE_DEG = 30.0                # hub cone half-angle (wall vs axis)
+    HUB_BASE_FLANGE_OD_FACTOR = 0.45    # hub base OD = min(0.45*A, 1.3*neck OD)
     HUB_BASE_NECK_OD_FACTOR = 1.3
-    OLET_BASE_TIP_OD_FACTOR = 1.5
-    OLET_BASE_NECK_OD_FACTOR = 0.92
-    WELD_PREP_TIP_FACTOR = 0.62
-
-    def allocate(self, overall_length_mm, flange_thickness_mm, reducing):
-        """Returns {section_name: length_mm} for the neck above the flange
-        top face. Raises ValueError when the envelope is non-positive -
-        fail-closed, never a fabricated minimum."""
-        envelope = overall_length_mm - flange_thickness_mm
-        if envelope <= 0.0:
-            raise ValueError(
-                f"Nipoflange neck envelope must be positive: overall_length_mm={overall_length_mm!r} "
-                f"- flange_thickness_mm={flange_thickness_mm!r} = {envelope!r}")
-        split = self.REDUCING_SPLIT if reducing else self.STRAIGHT_SPLIT
-        return {name: envelope * fraction for name, fraction in split.items()}
+    TAPER_END_FRACTION = 0.45           # taper ends at D + 0.45*(B_default - D)
+    CROWN_OD_FACTOR = 1.15              # crown OD = 1.15 * outlet OD
+    CROWN_LENGTH_FACTOR = 0.35          # crown length = 0.35 * outlet OD
+    UNDERCUT_DEPTH_FACTOR = 0.06        # diametral relief = 0.06 * outlet OD
+    UNDERCUT_LENGTH_FACTOR = 0.15       # relief length = 0.15 * outlet OD
+    BEVEL_ANGLE_DEG = 37.5              # B16.25-style weld-prep bevel angle
+    ROOT_FACE_MM = 1.6                  # weld-prep root face
+    MIN_STUB_FACTOR = 0.45              # see DOCUMENTED CLAMP above (spec said 1.0)
 
     def hub_base_od(self, flange_od_mm, neck_od_mm):
         return min(self.HUB_BASE_FLANGE_OD_FACTOR * flange_od_mm,
                    self.HUB_BASE_NECK_OD_FACTOR * neck_od_mm)
 
-    def outlet_base_od(self, tip_od_mm, neck_od_mm):
-        return min(self.OLET_BASE_TIP_OD_FACTOR * tip_od_mm,
-                   self.OLET_BASE_NECK_OD_FACTOR * neck_od_mm)
+    def crown_od(self, outlet_od_mm):
+        return self.CROWN_OD_FACTOR * outlet_od_mm
+
+    def root_face_radius(self, bore_diameter_mm):
+        return bore_diameter_mm / 2.0 + self.ROOT_FACE_MM
+
+    def sections(self, default_overall_length_mm, flange_thickness_mm,
+                  flange_od_mm, neck_od_mm, outlet_od_mm, bore_diameter_mm=None):
+        """Fixed absolute section lengths (mm) computed from the CATALOG
+        DEFAULT B - independent of any purchaser-trimmed actual B. Returns
+        a dict of lengths plus derived radii. Fail-closed on impossible
+        geometry (never fabricates a minimum)."""
+        import math as _m
+        d = flange_thickness_mm
+        b_def = default_overall_length_mm
+        if not (0.0 < d < b_def):
+            raise ValueError(f"flange thickness {d!r} must be positive and less than default B {b_def!r}")
+        hub_base_r = self.hub_base_od(flange_od_mm, neck_od_mm) / 2.0
+        neck_r = neck_od_mm / 2.0
+        outlet_r = outlet_od_mm / 2.0
+        if not (outlet_r <= neck_r < hub_base_r):
+            # equality outlet==neck is the FULL (size-on-size) variant: the
+            # "taper" band degenerates into the straight neck barrel.
+            raise ValueError(
+                f"nipoflange radii must satisfy hub_base > neck >= outlet - got "
+                f"{hub_base_r!r}, {neck_r!r}, {outlet_r!r}")
+        hub_len = (hub_base_r - neck_r) / _m.tan(_m.radians(self.HUB_ANGLE_DEG))
+        taper_end_z = d + self.TAPER_END_FRACTION * (b_def - d)
+        taper_len = taper_end_z - (d + hub_len)
+        if taper_len <= 0.0:
+            raise ValueError(
+                f"taper length non-positive ({taper_len!r}) - hub too long for TAPER_END_FRACTION")
+        undercut_len = self.UNDERCUT_LENGTH_FACTOR * outlet_od_mm
+        undercut_relief_r = outlet_r - (self.UNDERCUT_DEPTH_FACTOR * outlet_od_mm) / 2.0
+        crown_len = self.CROWN_LENGTH_FACTOR * outlet_od_mm
+        crown_r = self.crown_od(outlet_od_mm) / 2.0
+        bevel_target_r = (self.root_face_radius(bore_diameter_mm)
+                           if bore_diameter_mm is not None else outlet_r * 0.62)
+        bevel_len = (crown_r - bevel_target_r) / _m.tan(_m.radians(self.BEVEL_ANGLE_DEG))
+        if bevel_len <= 0.0:
+            raise ValueError(f"bevel length non-positive ({bevel_len!r}) - crown below bevel target radius")
+        return {"hub": hub_len, "taper": taper_len, "taper_end_z": taper_end_z,
+                "undercut": undercut_len, "crown": crown_len, "bevel": bevel_len,
+                "hub_base_r": hub_base_r, "neck_r": neck_r, "outlet_r": outlet_r,
+                "undercut_relief_r": undercut_relief_r, "crown_r": crown_r,
+                "bevel_target_r": bevel_target_r}
+
+    def min_valid_overall_length(self, sections, outlet_od_mm):
+        """Smallest legal actual B: taper end + fixed top sections + minimum
+        trimmable stub (MIN_STUB_FACTOR x outlet OD - see DOCUMENTED CLAMP)."""
+        return (sections["taper_end_z"] + sections["undercut"] + sections["crown"]
+                + sections["bevel"] + self.MIN_STUB_FACTOR * outlet_od_mm)
+
+    def stub_length(self, sections, actual_overall_length_mm, outlet_od_mm, extra_straight_mm=0.0):
+        """Straight outlet run for the ACTUAL B - the purchaser trim zone.
+        Fail-closed below min_valid_overall_length(). extra_straight_mm:
+        for the FULL (size-on-size) variant the 'taper' band is itself a
+        straight neck-OD run contiguous with the stub, so it counts toward
+        the minimum trimmable straight length."""
+        stub = (actual_overall_length_mm - sections["taper_end_z"]
+                - sections["undercut"] - sections["crown"] - sections["bevel"])
+        if stub + extra_straight_mm + 1e-9 < self.MIN_STUB_FACTOR * outlet_od_mm:
+            raise ValueError(
+                f"overall length {actual_overall_length_mm!r}mm leaves a {stub:.2f}mm outlet stub - "
+                f"below the minimum {self.MIN_STUB_FACTOR * outlet_od_mm:.2f}mm "
+                f"(min valid B = {self.min_valid_overall_length(sections, outlet_od_mm):.2f}mm).")
+        return stub
 
 
 class EccentricReducerOffsetRule:

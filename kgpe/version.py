@@ -15,7 +15,7 @@ previously-generated geometry may need to be regenerated.
 KGPE_VERSION = "0.1.0"
 
 # Bumps when a geometry rule (flange.py, pipe.py, buttweld.py, olet.py) changes
-RULESET_VERSION = "ruleset-2026.07.14"
+RULESET_VERSION = "ruleset-2026.07.21"  # nipoflange rule v4 (catalog-faithful profile + bore derivation)
 
 # Bumps when the mapping from a Dimension Library row -> rule input fields changes
 MAPPER_VERSION = "mapper-2026.07.14"

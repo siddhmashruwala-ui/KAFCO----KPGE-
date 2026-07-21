@@ -47,10 +47,11 @@ class NipoflangeGeometryTests(unittest.TestCase):
         self.assertAlmostEqual(meas["neck_outside_diameter_mm"], 60.3, places=1)
         self.assertAlmostEqual(meas["tip_outside_diameter_mm"], 33.4, places=1)
         self.assertLess(meas["tip_outside_diameter_mm"], meas["neck_outside_diameter_mm"])
-        # the compound assembly's weldolet outlet is a named feature.
+        # the compound assembly's sections are named features (v4 names).
         names = [f["name"] for f in gp["features"]]
-        for expected in ("flange_outer_wall", "hub_fillet", "main_barrel",
-                          "reducing_transition", "weldolet_outlet_body", "weld_prep_bevel"):
+        for expected in ("flange_outer_wall", "hub_cone", "reducing_taper",
+                          "reduced_outlet_stub", "undercut_relief", "olet_crown",
+                          "weld_prep_bevel"):
             self.assertIn(expected, names)
         self.assertTrue(gr.dimensional_validation_summary["passed"])
         self.assertTrue(gr.geometry_validation_summary["passed"])
@@ -60,9 +61,10 @@ class NipoflangeGeometryTests(unittest.TestCase):
         gr = res.geometry_result
         self.assertEqual(gr.generation_status, "GEOMETRY_GENERATED")
         names = [f["name"] for f in gr.geometry_payload["features"]]
-        self.assertNotIn("reducing_transition", names)
-        self.assertNotIn("weldolet_outlet_body", names)
+        self.assertNotIn("reducing_taper", names)
+        self.assertIn("neck_barrel", names)
         self.assertIn("weld_prep_bevel", names)
+        self.assertIn("bore_not_modeled", names)
 
     def test_reducing_is_deterministic(self):
         kwargs = {"reduced_tip_size": "1"}

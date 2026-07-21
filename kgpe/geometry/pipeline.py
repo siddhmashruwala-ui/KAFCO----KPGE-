@@ -59,6 +59,12 @@ class PipelineResult:
 
 
 def run_pipeline(request, resolver=None, generation_parameters=None, product_kwargs=None) -> PipelineResult:
+    # Convenience: external callers (the CRM bridge posts raw JSON) may pass
+    # generation_parameters as a plain dict - coerce to the real dataclass so
+    # the kernel's contract (params.radial_segments / params.to_dict()) holds.
+    if isinstance(generation_parameters, dict):
+        from .parameters import GenerationParameters
+        generation_parameters = GenerationParameters(**generation_parameters)
     prep = prepare_geometry_specification(request, resolver=resolver)
 
     if not prep.is_ready():
@@ -89,10 +95,16 @@ def run_pipeline(request, resolver=None, generation_parameters=None, product_kwa
         # already-resolved tip_od_value ConstructionValue, so the kernel
         # only ever receives resolved inputs (its documented contract).
         reduced_tip_size = pk.pop("reduced_tip_size", None)
+        # v4 raw per-order inputs, resolved into ConstructionValues below:
+        # bore_schedule (order's stated sch -> bore ID) and
+        # overall_length_override (Note-2 purchaser-trimmed B, mm).
+        bore_schedule = pk.pop("bore_schedule", None)
+        overall_length_override = pk.pop("overall_length_override", None)
         if resolver is not None:
             from .nipoflange_inputs import derive_nipoflange_product_kwargs
             derived = derive_nipoflange_product_kwargs(
-                request, prep.geometry_specification, resolver, reduced_tip_size=reduced_tip_size)
+                request, prep.geometry_specification, resolver, reduced_tip_size=reduced_tip_size,
+                bore_schedule=bore_schedule, overall_length_override=overall_length_override)
             merged = dict(derived)
             merged.update(pk)
             pk = merged

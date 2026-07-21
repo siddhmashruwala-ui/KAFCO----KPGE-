@@ -32,15 +32,19 @@ its kwarg absent - the product builder then fails CLOSED with an honest
 CONSTRUCTION_RULE_UNAVAILABLE, never a fabricated value.
 """
 from .construction_value import ConstructionValue
-from .cross_family import NipoflangeNeckODViaBranchPipeODRule
+from .cross_family import NipoflangeNeckODViaBranchPipeODRule, FlangeBoreViaPipeScheduleRule
 
 NIPOFLANGE_PROFILE_ID = "flange_nipoflange"
 
 _OVERALL_LENGTH_RULE_ID = "nipoflange_overall_length_catalog_reference"
 _OVERALL_LENGTH_RULE_VERSION = "1"
+_TRIM_RULE_ID = "nipoflange_purchaser_specified_overall_length"
+_TRIM_RULE_VERSION = "1"
+_BORE_PIPE_STANDARD = "ASME_B36.10M"
 
 
-def derive_nipoflange_product_kwargs(request, geometry_specification, resolver, reduced_tip_size=None):
+def derive_nipoflange_product_kwargs(request, geometry_specification, resolver, reduced_tip_size=None,
+                                       bore_schedule=None, overall_length_override=None):
     """Returns a dict with any of overall_length_value / neck_od_value /
     tip_od_value that could be derived. Never raises for an expected
     engineering outcome; never overwrites caller-supplied kwargs (the
@@ -60,6 +64,7 @@ def derive_nipoflange_product_kwargs(request, geometry_specification, resolver, 
     if neck_outcome.is_applied():
         derived["neck_od_value"] = neck_outcome.value
 
+    outlet_nps = primary_size
     if reduced_tip_size is not None:
         try:
             from ..contract.normalization import normalize_nps
@@ -67,10 +72,44 @@ def derive_nipoflange_product_kwargs(request, geometry_specification, resolver, 
         except Exception:
             small_nps = None
         if small_nps is not None:
+            outlet_nps = small_nps
             tip_outcome = od_rule.resolve(resolver, target_size_system="nps",
                                            target_size=small_nps, value_name="tip_outside_diameter_mm")
             if tip_outcome.is_applied():
                 derived["tip_od_value"] = tip_outcome.value
+
+    # Bore (rule v4): the order's stated schedule fully determines the bore
+    # at the OUTLET size (branch-pipe ID = OD - 2*WT), derived through the
+    # existing cross-family FlangeBoreViaPipeScheduleRule with an explicit
+    # pipe standard - real order data, never a default. Source priority:
+    # the raw "bore_schedule" product kwarg, else request.schedule.
+    schedule = bore_schedule or getattr(request, "schedule", None)
+    if schedule and outlet_nps is not None:
+        bore_rule = FlangeBoreViaPipeScheduleRule()
+        bore_outcome = bore_rule.resolve(resolver, target_standard="KAFCO_NIPOFLANGE",
+                                          target_size_system="nps", target_size=outlet_nps,
+                                          pipe_standard=_BORE_PIPE_STANDARD, pipe_schedule=schedule)
+        if bore_outcome.is_applied():
+            derived["bore_value"] = bore_outcome.value
+
+    # Purchaser-trimmed overall length (Note 2): a raw mm override supplied
+    # per order; wrapped as a provenance-carrying ConstructionValue. The
+    # catalog-default overall_length_value below stays untouched - it fixes
+    # the taper geometry; the override only resizes the straight trim zone.
+    if overall_length_override is not None:
+        try:
+            b_actual = float(overall_length_override)
+        except (TypeError, ValueError):
+            b_actual = None
+        if b_actual is not None and b_actual > 0.0:
+            derived["actual_overall_length_value"] = ConstructionValue(
+                name="nipoflange_actual_overall_length_mm", value=b_actual, unit="mm",
+                rule_id=_TRIM_RULE_ID, rule_version=_TRIM_RULE_VERSION,
+                derivation_trace=[
+                    "Purchaser-specified overall length (KAFCO source Note 2: 'Dimension B can be "
+                    "modified to suit purchaser's requirements') - per-order data, applied to the "
+                    "straight outlet trim zone only."],
+            )
 
     # Overall Length B: an explicitly opted-in construction parameter from
     # the KAFCO catalog row matching this exact identity.

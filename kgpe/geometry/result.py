@@ -89,6 +89,12 @@ class TopologyRepresentation:
     # performed anywhere.
     SOLID_REVOLVED_COMPOSITE_CONSTRUCTION_ENVELOPE_NO_BOOLEAN_CUT = \
         "SOLID_REVOLVED_COMPOSITE_CONSTRUCTION_ENVELOPE_NO_BOOLEAN_CUT"
+    # 2026-07-21 (nipoflange rule v4): same construction-derived revolved
+    # composite, but with a genuine through-bore wall (derived from the
+    # order's stated schedule via cross-family pipe ID) and annular
+    # closures at both ends - still no boolean cuts anywhere.
+    HOLLOW_REVOLVED_COMPOSITE_CONSTRUCTION_ENVELOPE_NO_BOOLEAN_CUT = \
+        "HOLLOW_REVOLVED_COMPOSITE_CONSTRUCTION_ENVELOPE_NO_BOOLEAN_CUT"
 
 
 ALL_TOPOLOGY_REPRESENTATIONS = frozenset({
@@ -103,6 +109,7 @@ ALL_TOPOLOGY_REPRESENTATIONS = frozenset({
     TopologyRepresentation.HOLLOW_ANNULAR_BODY_WITH_HUB_COMPOSITE_NO_BOOLEAN_CUT,
     TopologyRepresentation.SOLID_EXTERNAL_ENVELOPE_WITH_HUB_COMPOSITE_NO_BOOLEAN_CUT,
     TopologyRepresentation.SOLID_REVOLVED_COMPOSITE_CONSTRUCTION_ENVELOPE_NO_BOOLEAN_CUT,
+    TopologyRepresentation.HOLLOW_REVOLVED_COMPOSITE_CONSTRUCTION_ENVELOPE_NO_BOOLEAN_CUT,
 })
 
 
