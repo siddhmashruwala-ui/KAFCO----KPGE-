@@ -606,7 +606,7 @@ class TestPrompt12BackwardCompatibility(unittest.TestCase):
 
 class TestFullRegressionAndDemo(unittest.TestCase):
     def test_data_layer_fingerprint_unchanged(self):
-        self.assertEqual(_FINGERPRINT, "9301f07c27b8d7bb864fbc56a7999e13e241e40809ddf26d9a0c4981658d261b")  # Prompt 42: shifted by new ASME B16.5 hub/long_weld_neck facts
+        self.assertEqual(_FINGERPRINT, "f291f02e63b591de449502dcbb2980b7729e2cdbdd928765f6a847e13083d748")  # post-Prompt-9: shifted again by the KAFCO_Nipoflange 12th-dataset addition
 
     def test_legacy_generator_untouched(self):
         from kgpe.generator import _DISPATCH

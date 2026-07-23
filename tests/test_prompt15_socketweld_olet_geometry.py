@@ -32,7 +32,7 @@ from kgpe.geometry.ports import OPENING_DIAMETER_PROVENANCE_NOT_MODELED
 _READER, _ = build_canonical_reader()
 _FINGERPRINT = registry_fingerprint(_READER.registry)
 _RESOLVER = EngineeringResolver(_READER, _FINGERPRINT)
-_DATA_LAYER_FINGERPRINT = "9301f07c27b8d7bb864fbc56a7999e13e241e40809ddf26d9a0c4981658d261b"  # Prompt 42: shifted by new ASME B16.5 hub/long_weld_neck facts
+_DATA_LAYER_FINGERPRINT = "f291f02e63b591de449502dcbb2980b7729e2cdbdd928765f6a847e13083d748"  # post-Prompt-9: shifted again by the KAFCO_Nipoflange 12th-dataset addition
 
 
 def _prep(**kwargs):

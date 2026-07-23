@@ -61,6 +61,21 @@ _DATASET_TABLE = [
     {"dataset_id": "EN_buttweld", "dl_key": ("BUTTWELD_FILES", "EN_10253"),
      "product_family": VOC.PRODUCT_FAMILY_BUTTWELD_FITTING, "adapter_name": "EN_buttweld",
      "migration_status": MIGRATE_STATUS_MIGRATED_PROMPT_8},
+    # KAFCO_Nipoflange (added post-Prompt-9, 2026-07-20): a genuine 12th
+    # approved dataset - a real KAFCO catalog page, not an ASME/MSS/JIS/EN
+    # standard - that, unlike the original 11, has NO live-lookup
+    # counterpart in dimension_library.py (Nipoflange predates
+    # dimension_library.py's own file registries and was never wired into
+    # FLANGE_FILES/PIPE_FILES/etc - see kgpe/contract/adapters/
+    # kafco_nipoflange.py's own module docstring). dl_key=None marks this
+    # row as exempt from the dimension_library.py three-way cross-check
+    # below (Sec.3's cross-check reduces to a two-way check - table vs
+    # registry_builder._ADAPTERS only - for this one row); its source file
+    # path is declared directly via source_file_override instead.
+    {"dataset_id": "KAFCO_Nipoflange", "dl_key": None,
+     "source_file_override": "Nipoflange/KAFCO_Nipoflange_Dimensions.json",
+     "product_family": VOC.PRODUCT_FAMILY_FLANGE, "adapter_name": "KAFCO_Nipoflange",
+     "migration_status": "ADDED_POST_PROMPT_9_NIPOFLANGE"},
 ]
 
 # The one known adapter-shaped module that is DELIBERATELY NOT part of
@@ -117,7 +132,10 @@ def dataset_inventory():
         raise ClosureAuditError("Duplicate adapter_name entries in the dataset table.")
 
     all_dl_keys = {(reg_name, std) for reg_name, reg in dl_registries.items() for std in reg}
-    table_dl_keys = {row["dl_key"] for row in _DATASET_TABLE}
+    # KAFCO_Nipoflange's dl_key=None is excluded here by design (see its
+    # _DATASET_TABLE comment) - it has no dimension_library.py counterpart
+    # to cross-check against, so it must never be compared to all_dl_keys.
+    table_dl_keys = {row["dl_key"] for row in _DATASET_TABLE if row["dl_key"] is not None}
     if all_dl_keys != table_dl_keys:
         raise ClosureAuditError(
             f"dimension_library.py file registries and the dataset table have drifted apart. "
@@ -127,8 +145,13 @@ def dataset_inventory():
 
     inventory = []
     for row in _DATASET_TABLE:
-        reg_name, std_key = row["dl_key"]
-        source_file = dl_registries[reg_name][std_key]
+        if row["dl_key"] is not None:
+            reg_name, std_key = row["dl_key"]
+            source_file = dl_registries[reg_name][std_key]
+        else:
+            # KAFCO_Nipoflange exception (see _DATASET_TABLE comment) - no
+            # dimension_library.py entry to resolve a source_file from.
+            source_file = row["source_file_override"]
         fn = adapter_fns[row["adapter_name"]]
         fresh = FactRegistry()
         _, facts = fn(fresh)
@@ -144,6 +167,7 @@ def dataset_inventory():
             1 for f in stored if f.verification_status == V.VERIFIED_MANUFACTURER_SPECIFIC)
         entry["quarantined_count"] = sum(1 for f in stored if f.verification_status in V.NEVER_AUTHORITATIVE_STATUSES)
         del entry["dl_key"]
+        entry.pop("source_file_override", None)
         inventory.append(entry)
     return inventory
 

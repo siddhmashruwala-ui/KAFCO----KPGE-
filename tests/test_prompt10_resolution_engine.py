@@ -149,7 +149,11 @@ class TestStandardResolution(unittest.TestCase):
         spec = resolve(product_family="flange", primary_size="2", pressure_class="150")
         self.assertEqual(spec.status, ResolutionStatus.AMBIGUOUS_REQUEST)
         self.assertIn("standard", spec.ambiguous_candidates)
-        self.assertEqual(set(spec.ambiguous_candidates["standard"]), {"ASME_B16.5", "JIS_B2220", "EN_1092-1"})
+        # KAFCO_NIPOFLANGE added post-Prompt-9: NPS "2" Class 150 also
+        # matches KAFCO's own Nipoflange catalog data (BranchNPS 1/2"-2",
+        # ANSI 150#-2500#) - a real fourth candidate standard, not a defect.
+        self.assertEqual(set(spec.ambiguous_candidates["standard"]),
+                          {"ASME_B16.5", "JIS_B2220", "EN_1092-1", "KAFCO_NIPOFLANGE"})
 
     def test_standard_never_defaults_to_asme(self):
         spec = resolve(product_family="flange", primary_size="2")

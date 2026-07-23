@@ -42,7 +42,12 @@ from kgpe.contract.registry_builder import build_canonical_registry, registry_st
 # ---------------------------------------------------------------------------
 class TestInventoryComplete(unittest.TestCase):
     def test_all_eleven_datasets_have_an_adapter_in_the_builder(self):
-        self.assertEqual(len(_ADAPTERS), 11)
+        # 11 Prompt 5-8 datasets + KAFCO_Nipoflange (added post-Prompt-9,
+        # 2026-07-20 - a genuine 12th approved dataset with no
+        # dimension_library.py live-lookup counterpart; see
+        # kgpe/contract/data_layer_audit.py's _DATASET_TABLE dl_key=None
+        # exception for the same fact).
+        self.assertEqual(len(_ADAPTERS), 12)
 
     def test_every_ai_readable_file_maps_to_exactly_one_registered_standard_id(self):
         # 3 flange + 3 pipe + 3 buttweld + 1 socketweld + 1 olet = 11 files total,
@@ -346,7 +351,8 @@ class TestCompleteRegistryBuild(unittest.TestCase):
 
     def test_all_eleven_adapters_contribute(self):
         registry, counts = build_canonical_registry()
-        self.assertEqual(len(counts), 11)
+        # 11 Prompt 5-8 adapters + KAFCO_Nipoflange (post-Prompt-9) = 12.
+        self.assertEqual(len(counts), 12)
         for name, count in counts:
             self.assertGreater(count, 0, f"{name} contributed zero facts")
 

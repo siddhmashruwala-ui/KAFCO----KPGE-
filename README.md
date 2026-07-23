@@ -64,7 +64,7 @@ Engine/KGPE/
                               (run: python -m unittest discover -s tests -v)
     resolver/               - (Prompt 10, Phase 3) Engineering Specification Resolution. Built ONLY on
                               kgpe.contract.canonical_reader/snapshot - no adapter/dimension_library import.
-      request.py            - EngineeringRequest (raw external-request model, separate from EngineeringFact)
+      request.py              - EngineeringRequest (raw external-request model, separate from EngineeringFact)
       spec.py                - ResolvedEngineeringSpecification + the 7-status ResolutionStatus vocabulary
       aliases.py             - small explicit deterministic nomenclature alias tables (no fuzzy matching)
       engine.py              - EngineeringResolver / resolve_engineering_request() - the one public entry point
@@ -483,3 +483,61 @@ prompt, every structured engineering dataset already present in KGPE has
 a corresponding deterministic geometry implementation - the hologram
 viewer, export formats, and assemblies remain out of scope, deferred to
 later prompts per the 20-prompt plan.
+
+
+## Post-Prompt-9 addendum (test-suite closure fix, 2026-07-23)
+
+**Note on this README:** the addendum trail above stops at Prompt 15, but
+the actual code has moved well past that - `kgpe/version.py` and several
+adapter docstrings reference "Prompt 41" (ASME B16.5 Slip-On/Threaded/
+Socket-Weld/Lap-Joint/Blind flange subtypes) and "Prompt 42" (flange hub/
+neck taper + Long Weld Neck geometry), both already fully implemented and
+wired end-to-end (`kgpe/contract/adapters/asme_b16_5_flanges.py`,
+`kgpe/geometry/products/flange.py`). A `KAFCO_Nipoflange` adapter (a real
+KAFCO catalog page, not an ASME/MSS/JIS/EN standard) was also added as a
+genuine 12th canonical dataset. None of that work is documented here yet
+- flagging this gap rather than silently leaving it - a proper Prompt
+16-42 documentation pass is still owed.
+
+**What this addendum actually fixes:** running the full suite
+(`python -m unittest discover -s tests`) turned up 781 tests with 17
+failing (13 failures + 4 errors), all traced to one root cause: the
+KAFCO_Nipoflange addition changed the registry from 11 to 12 datasets,
+but several Prompt 8/9/10/12/13/14/15 baselines were never updated to
+match, and `data_layer_audit.py`'s dataset table had no way to represent
+a dataset with no `dimension_library.py` live-lookup counterpart (which
+Nipoflange genuinely has none of - it predates that file's registries).
+
+- `kgpe/contract/data_layer_audit.py` - `_DATASET_TABLE` gained a
+  documented `dl_key=None` / `source_file_override` exception path for
+  KAFCO_Nipoflange, so `dataset_inventory()` no longer raises
+  `ClosureAuditError` (was: "In builder but not table: {'KAFCO_Nipoflange'}").
+- `kgpe/contract/adapters/kafco_nipoflange.py` - docstring reworded to
+  drop its direct `KAFCO_CRM_Dashboard.html` filename reference (a real
+  isolation-test violation - KGPE production files must never name a CRM
+  file - not a stale baseline), while preserving the same factual note
+  that a corresponding CRM-side 3D fix was made at the same time.
+- Baselines updated across `tests/test_prompt8_migration.py`,
+  `test_prompt9_data_layer_closure.py`, `test_prompt10_resolution_engine.py`,
+  `test_prompt12_geometry_kernel.py`, `test_prompt13_buttweld_geometry.py`,
+  `test_prompt14_flange_geometry.py`, `test_prompt15_socketweld_olet_
+  geometry.py`: adapter/dataset count 11->12, per-adapter counts (+
+  `KAFCO_Nipoflange: 120`), manufacturer-specific fact count 145->235
+  (+ `"KAFCO"` alongside the pre-existing `"Bonney Forge"` profile),
+  built-fact total 6316->6436, stored-fact total 5886->5976,
+  source-JSON-file count 11->12, the Prompt 10 ambiguous-standard-
+  candidates set (+`"KAFCO_NIPOFLANGE"` for NPS 2/Class 150 flange
+  requests), and the data-layer fingerprint on 4 separate hardcoded
+  assertions, from `9301f07c27b8d7bb864fbc56a7999e13e241e40809ddf26d9a0c4981658d261b`
+  to `f291f02e63b591de449502dcbb2980b7729e2cdbdd928765f6a847e13083d748`
+  (verified identical across independent measurements, not guessed).
+  `authoritative_facts` (5725) and `quarantined_facts` (16) were
+  independently confirmed unaffected by the Nipoflange addition (all its
+  facts are `VERIFIED_MANUFACTURER_SPECIFIC`) and left untouched.
+
+**Verified this fix:** all 781 tests pass (0 failures, 0 errors) after
+the above changes - up from 764 passing / 17 failing beforehand. No
+engineering-source JSON, `generator.py`, `rules/*.py`, or any
+`geometry/products/*.py` file was touched - this was purely test-baseline
+and dataset-table-metadata catch-up, not a change to any ruleset or
+generated geometry.

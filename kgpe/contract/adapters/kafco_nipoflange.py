@@ -14,9 +14,11 @@ product photo, which shows plainly: there is no host run pipe and no
 saddle. It's a flange with a straight (or reducing) nipple rising from
 its center, ending in an ordinary bevelled weld-prep tip - a flange
 variant, not a branch outlet. Now classified as product_family=flange,
-flange_type=VOC.FLANGE_TYPE_NIPOFLANGE. See KAFCO_CRM_Dashboard.html's
-holoBuildModel nipoflange branch for the corresponding 3D-geometry fix
-made at the same time.
+flange_type=VOC.FLANGE_TYPE_NIPOFLANGE. A corresponding 3D-geometry fix
+was made in the CRM dashboard's own hologram viewer at the same time
+(outside this repository - KGPE production code never references CRM
+files, by design; see kgpe/contract/adapters/legacy_crm_quarantine_
+fixture.py for the one deliberate, non-production exception to that rule).
 
 WHY THIS ADAPTER EXISTS: prior KGPE work (mss_sp97_olets.py's own
 docstring, and model.py's ConstructionParameter docstring) explicitly

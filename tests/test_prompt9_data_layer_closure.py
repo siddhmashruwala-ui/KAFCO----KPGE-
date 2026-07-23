@@ -48,10 +48,19 @@ _REGISTRY, _COUNTS = build_canonical_registry()
 # optional_type_facts_per_source_row for the per-row breakdown) - all
 # VERIFIED_AUTHORITATIVE, no conflicts/quarantine, manufacturer-specific
 # and quarantined totals again unaffected.
-EXPECTED_BUILT_TOTAL = 6316
-EXPECTED_STORED_TOTAL = 5886
+# Post-Prompt-9 KAFCO_Nipoflange addition (2026-07-20): +120 built /
+# +90 stored facts, all VERIFIED_MANUFACTURER_SPECIFIC (3 facts/row x 30
+# rows) - the remaining 30 built-but-not-stored records/row are
+# ConstructionParameter overall-length entries, which are not
+# EngineeringFacts and are therefore outside all_facts()/canonical_fact_
+# count. authoritative_facts and quarantined_facts are unaffected -
+# confirmed directly via kgpe.contract.registry_builder.registry_
+# statistics() and kgpe.contract.data_layer_audit.dataset_inventory()'s
+# own KAFCO_Nipoflange row (authoritative_count=0, quarantined_count=0).
+EXPECTED_BUILT_TOTAL = 6436
+EXPECTED_STORED_TOTAL = 5976
 EXPECTED_AUTHORITATIVE = 5725
-EXPECTED_MANUFACTURER_SPECIFIC = 145
+EXPECTED_MANUFACTURER_SPECIFIC = 235
 EXPECTED_QUARANTINED_FACTS = 16
 EXPECTED_QUARANTINED_GROUPS = 8
 
@@ -81,7 +90,10 @@ class TestRegistryBaselineVerification(unittest.TestCase):
         expected = {
             # Prompt 42: ASME_B16.5_flanges shifted 1326 -> 1854 (+528, hub/long_weld_neck facts).
             "ASME_B16.5_flanges": 1854, "ASME_B36_pipes": 409, "ASME_B16.9_buttweld": 864,
-            "ASME_B16.11_socketweld": 750, "MSS_SP97_olets": 223, "JIS_B2220_flanges": 640,
+            "ASME_B16.11_socketweld": 750, "MSS_SP97_olets": 223,
+            # Post-Prompt-9: KAFCO_Nipoflange, the 12th dataset (2026-07-20).
+            "KAFCO_Nipoflange": 120,
+            "JIS_B2220_flanges": 640,
             "JIS_pipes": 261, "JIS_buttweld": 149, "EN_1092-1_flanges": 792,
             "EN_pipes": 104, "EN_buttweld": 270,
         }
@@ -93,9 +105,10 @@ class TestDatasetAdapterClosure(unittest.TestCase):
     no omission, no duplicate, no orphaned adapter."""
 
     def test_inventory_has_exactly_11_datasets(self):
+        # 11 Prompt 5-8 datasets + KAFCO_Nipoflange (post-Prompt-9) = 12.
         inv = A.dataset_inventory()
-        self.assertEqual(len(inv), 11)
-        self.assertEqual(len({row["dataset_id"] for row in inv}), 11)
+        self.assertEqual(len(inv), 12)
+        self.assertEqual(len({row["dataset_id"] for row in inv}), 12)
 
     def test_inventory_matches_registry_builder_adapters_one_to_one(self):
         from kgpe.contract.registry_builder import _ADAPTERS
@@ -107,7 +120,7 @@ class TestDatasetAdapterClosure(unittest.TestCase):
         from kgpe.contract.registry_builder import _ADAPTERS
         names = {name for name, _ in _ADAPTERS}
         self.assertNotIn("legacy_crm_quarantine_fixture", names)
-        self.assertEqual(len(_ADAPTERS), 11)
+        self.assertEqual(len(_ADAPTERS), 12)
 
     def test_per_dataset_counts_are_internally_consistent(self):
         for row in A.dataset_inventory():
@@ -292,7 +305,12 @@ class TestManufacturerSpecificAudit(unittest.TestCase):
     def test_exact_count_and_profile(self):
         mfr = [f for f in _REGISTRY.all_facts() if f.verification_status == V.VERIFIED_MANUFACTURER_SPECIFIC]
         self.assertEqual(len(mfr), EXPECTED_MANUFACTURER_SPECIFIC)
-        self.assertEqual({f.applicability.manufacturer_profile for f in mfr}, {"Bonney Forge"})
+        # "KAFCO" added post-Prompt-9: KAFCO_Nipoflange's own facts (Flange
+        # OD/Thickness/Weight) are VERIFIED_MANUFACTURER_SPECIFIC under
+        # manufacturer_profile="KAFCO" - a real second manufacturer-specific
+        # profile alongside the pre-existing Bonney Forge olet data, not a
+        # collapse of the distinction between them.
+        self.assertEqual({f.applicability.manufacturer_profile for f in mfr}, {"Bonney Forge", "KAFCO"})
 
     def test_query_without_optin_never_returns_manufacturer_specific(self):
         from kgpe.contract.model import DimensionQuarantined
@@ -443,7 +461,8 @@ class TestSnapshotAndFingerprint(unittest.TestCase):
 
     def test_snapshot_structure_and_counts(self):
         snap = build_data_layer_snapshot(_REGISTRY, _COUNTS)
-        self.assertEqual(snap["dataset_count"], 11)
+        # 11 Prompt 5-8 datasets + KAFCO_Nipoflange (post-Prompt-9) = 12.
+        self.assertEqual(snap["dataset_count"], 12)
         self.assertEqual(snap["total_facts_stored"], EXPECTED_STORED_TOTAL)
         self.assertEqual(snap["total_facts_built"], EXPECTED_BUILT_TOTAL)
         self.assertEqual(len(snap["unresolved_conflict_ids"]), EXPECTED_QUARANTINED_GROUPS)
@@ -540,11 +559,13 @@ class TestLegacyJSIsolationAudit(unittest.TestCase):
         self.assertNotIn('open(', src)  # never actually opens any file
 
     def test_source_json_files_untouched_this_session(self):
+        # 11 Prompt 5-8 source files + Nipoflange/KAFCO_Nipoflange_Dimensions.json
+        # (post-Prompt-9, 2026-07-20) = 12.
         ai_readable_root = os.path.abspath(os.path.join(_ROOT, "..", "..", "AI-Readable"))
         json_files = []
         for dirpath, _dirs, filenames in os.walk(ai_readable_root):
             json_files.extend(os.path.join(dirpath, fn) for fn in filenames if fn.endswith(".json"))
-        self.assertEqual(len(json_files), 11)
+        self.assertEqual(len(json_files), 12)
 
 
 class TestExistingDemoUnchanged(unittest.TestCase):
