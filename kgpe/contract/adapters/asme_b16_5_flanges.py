@@ -225,6 +225,77 @@ _HUB_FIELD_SPECS = (
         "Value is computed from NPS alone (not tabulated per-class, since it genuinely does not "
         "vary by class) - see _ingest_hub_dimensions.py's lwn_length_through_hub_mm().",
     ),
+    # ── 2026-07-27, second pass: the other four hub-bearing subtypes ────────────────────
+    # Slip-on, threaded, socket-welding and lap-joint flanges all have hubs; B16.5 Table 8
+    # tabulates X and Y for every one of them. Until now this engine held neither column
+    # for any of them, so all four generated as flat plates - which is exactly what a
+    # customer-facing viewer then showed, and why this work started.
+    #
+    # X first. The single HubBaseDiameter_mm column is SHARED across every hub-bearing
+    # flange type, not weld-neck-specific - confirmed by finding the identical column in
+    # weld-neck, slip-on and threaded tables at every source consulted, matching this
+    # file's own long-verified values cell-for-cell. The re-tag above was therefore
+    # correct in mechanism but too narrow in scope; these four entries widen it. Same
+    # source column, re-tagged, never re-derived.
+    (
+        "HubBaseDiameter_mm", VOC.DIM_HUB_BASE_DIAMETER, "slip_on",
+        "Same source column and value as the weld_neck entry above. ASME B16.5 Table 8 "
+        "publishes ONE hub-diameter-at-base column serving all hub-bearing flange types; "
+        "confirmed 2026-07-27 by ferrobend.com's slip-on and threaded tables reproducing this "
+        "file's existing HubBaseDiameter_mm column cell-for-cell across all 20 Class 150 sizes.",
+    ),
+    (
+        "HubBaseDiameter_mm", VOC.DIM_HUB_BASE_DIAMETER, "threaded",
+        "Same source column and verification as the slip_on entry above - B16.5's hub diameter "
+        "at base does not vary by flange type.",
+    ),
+    (
+        "HubBaseDiameter_mm", VOC.DIM_HUB_BASE_DIAMETER, "socket_weld",
+        "Same source column and verification as the slip_on entry above.",
+    ),
+    (
+        "HubBaseDiameter_mm", VOC.DIM_HUB_BASE_DIAMETER, "lap_joint",
+        "Same source column and verification as the slip_on entry above.",
+    ),
+    # Y next. Unlike X, length through hub DOES vary by type, so each reads its own column.
+    # Every cell behind these four columns required two independent sources to agree; where
+    # they did not, the cell is simply absent and the flange honestly reports its hub
+    # unavailable. See the source file's own notes block for the four sources that were
+    # excluded for failing the hub-diameter anchor, and for the list of open cells.
+    (
+        "LengthThroughHub_SlipOn_mm", VOC.DIM_LENGTH_THROUGH_HUB, "slip_on",
+        "ASME B16.5 Table 8 'Y' for slip-on flanges. Ingested 2026-07-27 by cross-verifying "
+        "ferrobend.com, catalog.coastalflange.com, texasflange.com, weldflange.com and a scanned "
+        "B16.5 metric table; each source was first scored against this file's own "
+        "HubBaseDiameter_mm column, and four sources that failed that check were excluded "
+        "entirely. Y INCLUDES the flange thickness (measured from the flange face through to the "
+        "hub end) - the geometry kernel derives the hub's projection as Y minus thickness.",
+    ),
+    (
+        "LengthThroughHub_Threaded_mm", VOC.DIM_LENGTH_THROUGH_HUB, "threaded",
+        "ASME B16.5 Table 8 'Y' for threaded flanges - same shared column as slip-on, which "
+        "independent per-type vendor pages publish identically at every size. Class 600 is "
+        "deliberately ABSENT: two anchor-passing sources differ there by a constant 6.4mm at "
+        "every size, which is a definitional difference rather than a typo, and no preference "
+        "was exercised. That class resolves as hub-unavailable for threaded until the printed "
+        "standard settles it.",
+    ),
+    (
+        "LengthThroughHub_SocketWeld_mm", VOC.DIM_LENGTH_THROUGH_HUB, "socket_weld",
+        "ASME B16.5 Table 8 'Y' for socket-welding flanges - same shared column as slip-on, "
+        "emitted only up to each class's real availability limit (NPS 3 at Class 300/600, NPS "
+        "2-1/2 at Class 900/1500). Classes 400 and 2500 publish no socket-weld table at all and "
+        "emit nothing; one source states Class 400 socket-weld flanges are made to Class 600 "
+        "dimensions, but substituting them would be inference, so they are not emitted.",
+    ),
+    (
+        "LengthThroughHub_LapJoint_mm", VOC.DIM_LENGTH_THROUGH_HUB, "lap_joint",
+        "ASME B16.5 Table 8 'Y' for lap-joint (lapped) flanges. Equals the slip-on figure at the "
+        "smaller sizes and diverges above - a real divergence, confirmed independently in both "
+        "inch and millimetre sources. Note that vendor tables carry a standing caveat that shops "
+        "commonly forge lap joints to the SLIP-ON hub length regardless; confirm with the "
+        "supplier before a lap-joint hub length goes on a fabrication drawing.",
+    ),
 )
 
 # (json_field, canonical_dimension_name, flange_type, verification_note) -

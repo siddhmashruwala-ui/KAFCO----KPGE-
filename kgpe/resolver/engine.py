@@ -415,7 +415,30 @@ def _resolve_one_dimension(self, dim_name, criteria, allow_mfr, allow_constr, tr
                       f"subtype filter relaxed (shared cross-subtype identity check)")
         r2 = self.reader.read(dim_name, allow_manufacturer_specific=allow_mfr,
                                allow_construction_parameter=allow_constr, **relaxed_criteria)
-        if r2.outcome != OUTCOME_NO_MATCH:
+        # ── 2026-07-27: accept the relaxed answer ONLY when it is unambiguous ──────────
+        # This previously accepted anything that was not NO_MATCH, which included
+        # AMBIGUOUS - and that turned a harmless miss into a fatal one. Concretely:
+        # asking for a Class 150 NPS 2 LAP JOINT length_through_hub_mm found no
+        # lap-joint fact (correct - that cell is a known open gap), relaxed the subtype
+        # filter, matched the four OTHER subtypes' hub lengths, and returned AMBIGUOUS.
+        # AMBIGUOUS fails the whole request, so a flange that should simply have drawn
+        # without a hub failed to resolve at all.
+        #
+        # The relaxation exists to recognise dimensions whose identity is NOT
+        # subtype-scoped in the canonical data - a shared fact carrying no subtype tag.
+        # If dropping the subtype filter surfaces SEVERAL competing facts, that is
+        # positive evidence the dimension IS subtype-scoped, so the relaxation simply
+        # does not apply and the original honest NO_MATCH stands. Nothing is picked and
+        # nothing is invented; a genuinely shared fact still resolves exactly as before.
+        # AMBIGUOUS is the one outcome that must NOT be promoted. Everything else keeps
+        # its previous behaviour - in particular QUARANTINED still propagates, because a
+        # quarantine is a safety signal about the data and swallowing it would turn a
+        # specific, actionable "this fact is quarantined" into a vague "unsupported".
+        if r2.outcome == OUTCOME_AMBIGUOUS:
+            trace.append(f"dimension={dim_name!r} relaxed retry matched several subtype-scoped "
+                          f"facts - the dimension varies by subtype, so relaxation does not apply "
+                          f"and the subtype-scoped miss stands")
+        elif r2.outcome != OUTCOME_NO_MATCH:
             r = r2
 
     if r.outcome == OUTCOME_EXACT_MATCH:

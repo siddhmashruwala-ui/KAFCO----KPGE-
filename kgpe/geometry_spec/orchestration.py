@@ -151,11 +151,43 @@ def prepare_geometry_specification(request, resolver=None):
         return GeometryPreparationResult(identity_resolution, None, spec, OrchestrationStage.PROFILE_SELECTION)
 
     explicit_requested = set(request.dimensions or [])
-    needed = sorted(profile.required_dimensions | (explicit_requested & profile.optional_dimensions))
-    dim_request = _copy_request_with_dimensions(request, needed)
+    # Opportunistic extras: "fetch if this size/class has one". Only honoured for
+    # dimensions the profile already calls optional - a caller cannot smuggle a
+    # required dimension in through this door, nor invent a new one.
+    opportunistic = set(request.opportunistic_dimensions or []) & profile.optional_dimensions
+    opportunistic -= explicit_requested          # an explicit require always wins
+    needed = (profile.required_dimensions | (explicit_requested & profile.optional_dimensions)
+              | opportunistic)
+    dim_request = _copy_request_with_dimensions(request, sorted(needed))
     dimension_resolution = resolver.resolve(dim_request)
     if dimension_resolution.status != ResolutionStatus.RESOLVED:
-        dimension_resolution = _attempt_rating_relaxation(resolver, dim_request, needed, dimension_resolution)
+        dimension_resolution = _attempt_rating_relaxation(resolver, dim_request, sorted(needed),
+                                                          dimension_resolution)
+    if dimension_resolution.status != ResolutionStatus.RESOLVED and opportunistic:
+        # ── "If you have it" is not the same request as "I require it" ────────────────
+        # `request.dimensions` means REQUIRE: naming an unavailable dimension there
+        # fails the request, deliberately, so that a caller asking for something we do
+        # not have is told so rather than quietly handed an object missing it. Several
+        # tests assert exactly that, and they are right to.
+        #
+        # But a consumer that draws pictures needs the other question too: fetch the
+        # hub IF this class and size has one, and carry on gracefully if not. Before
+        # `request.opportunistic_dimensions` existed there was no way to ask it, so the
+        # CRM had to use the REQUIRE channel - and a Class 150 lap-joint flange, whose
+        # hub cell is a deliberate open gap, stopped resolving altogether. A flange that
+        # will not render at all is strictly worse than one rendered honestly hubless.
+        #
+        # So: retry with only the opportunistic extras removed. Everything the caller
+        # actually required stays required, and a quarantine or a genuine missing
+        # requirement still fails exactly as loudly as before.
+        retry = resolver.resolve(_copy_request_with_dimensions(request, sorted(needed - opportunistic)))
+        if retry.status == ResolutionStatus.RESOLVED:
+            missing = sorted(opportunistic - set(retry.resolved_dimensions or {}))
+            retry.trace.append(
+                "orchestration: resolved without opportunistic dimension(s) %s - no authoritative "
+                "fact for this subtype/size/class. The feature they describe is reported "
+                "unavailable; the object itself is unaffected." % (", ".join(missing) or "-"))
+            dimension_resolution = retry
 
     spec = compiler.compile(dimension_resolution, profile=profile)
     failed_stage = None

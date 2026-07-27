@@ -56,6 +56,21 @@ class EngineeringRequest:
     # "resolve exactly these named canonical dimensions" (Sec.17.A).
     dimensions: Optional[List[str]] = field(default_factory=list)
 
+    # --- opportunistic dimensions (2026-07-27) ---
+    # "Resolve these IF this standard/subtype/size/class publishes them; carry on
+    # without them if not." Distinct from `dimensions`, which means REQUIRE: naming an
+    # unavailable dimension there fails the request on purpose, so a caller is told
+    # about a gap rather than silently handed an object missing something it asked for.
+    # That contract is worth keeping, which is why this is a separate channel rather
+    # than a softening of the existing one.
+    #
+    # It exists for consumers that render: a viewer wants the hub on the flanges that
+    # have one without the flanges that do not failing to draw at all. Honoured only
+    # for dimensions the selected profile already lists as optional - a required
+    # dimension cannot be smuggled in through here, and neither can an unknown one.
+    # Ignored entirely by the resolver itself; only the geometry orchestration reads it.
+    opportunistic_dimensions: Optional[List[str]] = field(default_factory=list)
+
     def to_dict(self):
         return {k: v for k, v in asdict(self).items()}
 

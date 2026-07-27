@@ -116,16 +116,27 @@ _NO_BORE_SUBTYPES = frozenset({"blind"})
 # actually produced when BOTH facts resolve (see build() below) - never
 # blocking, never fabricated for the other four Prompt 41 subtypes or for
 # JIS_B2220/EN_1092-1 weld_neck.
-_HUB_ELIGIBLE_SUBTYPES = frozenset({"weld_neck", "long_weld_neck"})
+#
+# 2026-07-27 UPDATE: widened from {weld_neck, long_weld_neck} to every hub-bearing
+# subtype, now that ASME B16.5 Table 8's X and Y columns have been ingested for
+# slip-on, threaded, socket-welding and lap-joint as well. The gate below is
+# unchanged in kind - a hub is still produced ONLY when both facts actually
+# resolve for that exact (standard, class, NPS, subtype) - so the classes and
+# sizes where the cross-verification found no agreement simply keep generating a
+# flat plate and reporting the hub unavailable, exactly as before. Eligibility
+# means "may ask", never "will fabricate".
+_HUB_ELIGIBLE_SUBTYPES = frozenset({
+    "weld_neck", "long_weld_neck", "slip_on", "threaded", "socket_weld", "lap_joint"})
 
 # The ONLY flange subtype that physically has no hub. A blind flange is a solid
 # disc closing a line - there is nothing for a hub to sit on.
 #
 # Everything else - slip_on, threaded, socket_weld, lap_joint - DOES have a hub:
 # ASME B16.5 Table 8 tabulates both X (hub diameter at base) and Y (length through
-# hub) for them. This engine simply holds no facts for those columns yet (the
-# canonical dataset carries a single HubBaseDiameter_mm sourced from the WELD NECK
-# table, plus length-through-hub for weld_neck and long_weld_neck only).
+# hub) for them, and as of 2026-07-27 this engine holds those columns for most
+# (class, NPS) combinations. Where the cross-verification found no agreement the
+# facts are absent and the hub reports unavailable - which is what this constant
+# still exists to distinguish from a flange that has no hub at all.
 #
 # That distinction is the whole point of splitting this constant out. Reporting
 # NOT_APPLICABLE_SUBTYPE for a slip-on made a claim about physics - "this flange
@@ -217,7 +228,8 @@ def build(geometry_spec, generation_parameters, bore_value=None):
     # REQUIRED dimension (PROFILE_FLANGE_LONG_WELD_NECK - it is what
     # defines the subtype), so it lives in `dims` there, not `opt`.
     hub_dia_mm = None
-    hub_length_mm = None
+    hub_length_mm = None      # B16.5 "Y" - flange face through to hub end, INCLUDES thickness
+    hub_projection_mm = None  # what the mesh builders need - the part standing proud of the plate
     if subtype in _HUB_ELIGIBLE_SUBTYPES:
         hub_dia_entry = opt.get("hub_base_diameter_mm")
         hub_length_entry = dims.get("length_through_hub_mm") or opt.get("length_through_hub_mm")
@@ -234,6 +246,28 @@ def build(geometry_spec, generation_parameters, bore_value=None):
                 raise GeometryInputError(
                     f"hub_base_diameter_mm ({hub_dia_mm!r}) must exceed bore_diameter_mm ({bore_mm!r}) "
                     f"- the hub must have positive wall thickness around the bore.")
+            # ═══ Y IS THE TOTAL, NOT THE PROJECTION (2026-07-27) ═══
+            # ASME B16.5 measures "length through hub" Y from the FLANGE FACE through
+            # to the end of the hub. It already contains the flange thickness. The
+            # builders below stack their hub cylinder ON TOP of a body of `thickness`,
+            # so handing them Y unchanged built every hub-bearing flange one full
+            # flange-thickness too tall:
+            #
+            #   2" #150 weld neck   true Y 61.98  ->  built 79.51 mm  (+28%)
+            #   2" #150 long WN     true Y 229.0  ->  built 246.53 mm (+8%)
+            #
+            # Verified against the source tables three ways: a 2" 150 slip-on is
+            # tf 19.05 + Y 25.4, and a real one stands 25.4 mm tall, not 44.45. The
+            # hub PROJECTS Y - tf beyond the plate; that is what the builder needs.
+            #
+            # This was invisible until hub facts started resolving at all, so it never
+            # showed up as a wrong drawing before today - but it was wrong the whole time.
+            hub_projection_mm = hub_length_mm - thickness
+            if hub_projection_mm <= 0.0:
+                raise GeometryInputError(
+                    f"length_through_hub_mm ({hub_length_mm!r}) must exceed the flange "
+                    f"thickness ({thickness!r}) - B16.5 measures Y from the flange face "
+                    f"through the hub, so it necessarily includes the plate.")
             hub_status = "MODELED_STRAIGHT_CYLINDER_SIMPLIFICATION"
         else:
             hub_status = "UNAVAILABLE_NO_AUTHORITATIVE_DIMENSIONS"
@@ -247,7 +281,7 @@ def build(geometry_spec, generation_parameters, bore_value=None):
     if bore_mm is not None:
         if hub_dia_mm is not None:
             mesh, features = build_hollow_cylinder_with_hub(
-                od / 2.0, hub_dia_mm / 2.0, bore_mm / 2.0, thickness, hub_length_mm, n)
+                od / 2.0, hub_dia_mm / 2.0, bore_mm / 2.0, thickness, hub_projection_mm, n)
             topology = TopologyRepresentation.HOLLOW_ANNULAR_BODY_WITH_HUB_COMPOSITE_NO_BOOLEAN_CUT
         else:
             mesh, features = build_hollow_cylinder(od / 2.0, bore_mm / 2.0, thickness, n)
@@ -255,7 +289,7 @@ def build(geometry_spec, generation_parameters, bore_value=None):
     else:
         if hub_dia_mm is not None:
             mesh, features = build_solid_cylinder_with_hub(
-                od / 2.0, hub_dia_mm / 2.0, thickness, hub_length_mm, n)
+                od / 2.0, hub_dia_mm / 2.0, thickness, hub_projection_mm, n)
             topology = TopologyRepresentation.SOLID_EXTERNAL_ENVELOPE_WITH_HUB_COMPOSITE_NO_BOOLEAN_CUT
         else:
             mesh, features = build_solid_cylinder(od / 2.0, thickness, n)
@@ -315,8 +349,17 @@ def build(geometry_spec, generation_parameters, bore_value=None):
         measured_hub_length = abs(mesh.vertices[hub_outer_wall["vertex_range"][1]][2]
                                    - mesh.vertices[hub_outer_wall["vertex_range"][0]][2])
         measurements["hub_base_diameter_mm"] = measured_hub_dia
-        measurements["length_through_hub_mm"] = measured_hub_length
         expected["hub_base_diameter_mm"] = hub_dia_mm
+        # The hub wall's own extent is the PROJECTION, not Y - it starts where the
+        # plate ends. Validating it against Y is what let the plate get double-counted
+        # for as long as it did: the check passed precisely because the mesh was wrong
+        # in the same direction the check expected.
+        measurements["hub_projection_mm"] = measured_hub_length
+        expected["hub_projection_mm"] = hub_projection_mm
+        # And validate the number that actually goes on a drawing: face to hub end,
+        # measured across the whole part. This is the assertion that would have caught
+        # the double-count on day one, so it is the one worth keeping.
+        measurements["length_through_hub_mm"] = measure_axial_length(mesh)
         expected["length_through_hub_mm"] = hub_length_mm
 
     # --- Raised face (Sec.18-19): diameter-only PARTIAL feature metadata -
@@ -347,7 +390,13 @@ def build(geometry_spec, generation_parameters, bore_value=None):
     hub_params = {"status": hub_status}
     if has_hub:
         hub_params["hub_base_diameter_mm"] = hub_dia_mm
+        # The authoritative B16.5 figure: flange face through to hub end, plate included.
+        # This is the number that belongs on a drawing as the overall length.
         hub_params["length_through_hub_mm"] = hub_length_mm
+        # The derived modelling quantity: how far the hub stands proud of the plate.
+        # Published so a consumer can never again mistake one for the other - the
+        # confusion between these two is exactly what built every hub a plate too tall.
+        hub_params["hub_projection_mm"] = hub_projection_mm
     hub_feature = {"name": "hub", "type": "hub_metadata" if has_hub else "hub_unavailable_metadata",
                    "vertex_range": [0, 0], "face_range": [0, 0], "params": hub_params}
 

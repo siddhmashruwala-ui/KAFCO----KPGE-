@@ -209,14 +209,23 @@ PROFILE_FLANGE_LONG_WELD_NECK = GeometryProfile(
 # touched ASME_B16.5_Flanges.json).
 # ---------------------------------------------------------------------------
 PROFILE_FLANGE_SLIP_ON = GeometryProfile(
-    profile_id="flange_slip_on", version="1",
+    profile_id="flange_slip_on", version="2",
     product_family=VOC.PRODUCT_FAMILY_FLANGE, subtypes=frozenset({"slip_on"}),
     required_dimensions=frozenset({
         VOC.DIM_OUTSIDE_DIAMETER, VOC.DIM_FLANGE_THICKNESS_OTHER_TYPES,
         VOC.DIM_BOLT_CIRCLE_DIAMETER, VOC.DIM_BOLT_HOLE_DIAMETER,
         VOC.DIM_NUM_BOLTS, VOC.DIM_BOLT_SIZE_DESIGNATION,
     }),
-    optional_dimensions=frozenset({VOC.DIM_RAISED_FACE_DIAMETER, VOC.DIM_BORE_DIAMETER}),
+    # v2 (2026-07-27): hub_base_diameter_mm and length_through_hub_mm moved into
+    # optional_dimensions. B16.5 Table 8 always tabulated a hub for slip-on flanges;
+    # this engine simply held no facts for it, so every slip-on rendered as a flat
+    # plate. The columns are now ingested (see the adapter's _HUB_FIELD_SPECS), and
+    # they are OPTIONAL rather than required: the cross-verification left real gaps
+    # at some class/NPS combinations, and a slip-on with no published hub figure is
+    # still a perfectly valid flange to resolve - it just draws without one.
+    optional_dimensions=frozenset({
+        VOC.DIM_RAISED_FACE_DIAMETER, VOC.DIM_BORE_DIAMETER,
+        VOC.DIM_HUB_BASE_DIAMETER, VOC.DIM_LENGTH_THROUGH_HUB}),
     construction_derivable_dimensions=frozenset(
         {VOC.DIM_BORE_DIAMETER, VOC.DIM_HUB_BASE_DIAMETER, VOC.DIM_LENGTH_THROUGH_HUB}),
     notes="Prompt 41: ASME B16.5 slip-on flange thickness ('TJ', shared with threaded/"
@@ -229,14 +238,19 @@ PROFILE_FLANGE_SLIP_ON = GeometryProfile(
 )
 
 PROFILE_FLANGE_THREADED = GeometryProfile(
-    profile_id="flange_threaded", version="1",
+    profile_id="flange_threaded", version="2",
     product_family=VOC.PRODUCT_FAMILY_FLANGE, subtypes=frozenset({"threaded"}),
     required_dimensions=frozenset({
         VOC.DIM_OUTSIDE_DIAMETER, VOC.DIM_FLANGE_THICKNESS_OTHER_TYPES,
         VOC.DIM_BOLT_CIRCLE_DIAMETER, VOC.DIM_BOLT_HOLE_DIAMETER,
         VOC.DIM_NUM_BOLTS, VOC.DIM_BOLT_SIZE_DESIGNATION,
     }),
-    optional_dimensions=frozenset({VOC.DIM_RAISED_FACE_DIAMETER, VOC.DIM_BORE_DIAMETER}),
+    # v2 (2026-07-27): hub dimensions promoted to optional - see PROFILE_FLANGE_SLIP_ON
+    # above for the full rationale. Same policy: ingested where two sources agreed,
+    # absent (and honestly reported unavailable) where they did not.
+    optional_dimensions=frozenset({
+        VOC.DIM_RAISED_FACE_DIAMETER, VOC.DIM_BORE_DIAMETER,
+        VOC.DIM_HUB_BASE_DIAMETER, VOC.DIM_LENGTH_THROUGH_HUB}),
     construction_derivable_dimensions=frozenset(
         {VOC.DIM_BORE_DIAMETER, VOC.DIM_HUB_BASE_DIAMETER, VOC.DIM_LENGTH_THROUGH_HUB}),
     notes="Prompt 41: shared 'TJ'/'T' thickness figure, same as flange_slip_on above. "
@@ -247,14 +261,19 @@ PROFILE_FLANGE_THREADED = GeometryProfile(
 )
 
 PROFILE_FLANGE_SOCKET_WELD = GeometryProfile(
-    profile_id="flange_socket_weld", version="1",
+    profile_id="flange_socket_weld", version="2",
     product_family=VOC.PRODUCT_FAMILY_FLANGE, subtypes=frozenset({"socket_weld"}),
     required_dimensions=frozenset({
         VOC.DIM_OUTSIDE_DIAMETER, VOC.DIM_FLANGE_THICKNESS_OTHER_TYPES,
         VOC.DIM_BOLT_CIRCLE_DIAMETER, VOC.DIM_BOLT_HOLE_DIAMETER,
         VOC.DIM_NUM_BOLTS, VOC.DIM_BOLT_SIZE_DESIGNATION,
     }),
-    optional_dimensions=frozenset({VOC.DIM_RAISED_FACE_DIAMETER, VOC.DIM_BORE_DIAMETER}),
+    # v2 (2026-07-27): hub dimensions promoted to optional - see PROFILE_FLANGE_SLIP_ON
+    # above for the full rationale. Same policy: ingested where two sources agreed,
+    # absent (and honestly reported unavailable) where they did not.
+    optional_dimensions=frozenset({
+        VOC.DIM_RAISED_FACE_DIAMETER, VOC.DIM_BORE_DIAMETER,
+        VOC.DIM_HUB_BASE_DIAMETER, VOC.DIM_LENGTH_THROUGH_HUB}),
     construction_derivable_dimensions=frozenset(
         {VOC.DIM_BORE_DIAMETER, VOC.DIM_HUB_BASE_DIAMETER, VOC.DIM_LENGTH_THROUGH_HUB}),
     notes="Prompt 41: shared 'TJ'/'T' thickness figure, same as flange_slip_on above. "
@@ -265,14 +284,19 @@ PROFILE_FLANGE_SOCKET_WELD = GeometryProfile(
 )
 
 PROFILE_FLANGE_LAP_JOINT = GeometryProfile(
-    profile_id="flange_lap_joint", version="1",
+    profile_id="flange_lap_joint", version="2",
     product_family=VOC.PRODUCT_FAMILY_FLANGE, subtypes=frozenset({"lap_joint"}),
     required_dimensions=frozenset({
         VOC.DIM_OUTSIDE_DIAMETER, VOC.DIM_FLANGE_THICKNESS_OTHER_TYPES,
         VOC.DIM_BOLT_CIRCLE_DIAMETER, VOC.DIM_BOLT_HOLE_DIAMETER,
         VOC.DIM_NUM_BOLTS, VOC.DIM_BOLT_SIZE_DESIGNATION,
     }),
-    optional_dimensions=frozenset({VOC.DIM_RAISED_FACE_DIAMETER, VOC.DIM_BORE_DIAMETER}),
+    # v2 (2026-07-27): hub dimensions promoted to optional - see PROFILE_FLANGE_SLIP_ON
+    # above for the full rationale. Same policy: ingested where two sources agreed,
+    # absent (and honestly reported unavailable) where they did not.
+    optional_dimensions=frozenset({
+        VOC.DIM_RAISED_FACE_DIAMETER, VOC.DIM_BORE_DIAMETER,
+        VOC.DIM_HUB_BASE_DIAMETER, VOC.DIM_LENGTH_THROUGH_HUB}),
     construction_derivable_dimensions=frozenset(
         {VOC.DIM_BORE_DIAMETER, VOC.DIM_HUB_BASE_DIAMETER, VOC.DIM_LENGTH_THROUGH_HUB}),
     notes="Prompt 41: shared 'TJ'/'T' thickness figure, same as flange_slip_on above. "

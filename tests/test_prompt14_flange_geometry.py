@@ -33,7 +33,7 @@ from kgpe.geometry.products import flange
 _READER, _ = build_canonical_reader()
 _FINGERPRINT = registry_fingerprint(_READER.registry)
 _RESOLVER = EngineeringResolver(_READER, _FINGERPRINT)
-_DATA_LAYER_FINGERPRINT = "2906e77c12321e4da4816d60e7582f194a09d480d1d1b927712160f60440cda0"  # post-Prompt-9: shifted again by the KAFCO_Nipoflange 12th-dataset addition
+_DATA_LAYER_FINGERPRINT = "c42f4dbe023d9720261de53c54e50193390f5fd5a7ff6129580d8a1ccfd3bf68"  # post-Prompt-9: shifted again by the KAFCO_Nipoflange 12th-dataset addition
 
 
 def _prep(**kwargs):
@@ -1156,6 +1156,143 @@ class TestLongWeldNeckAndHubGeometry(unittest.TestCase):
                           TopologyRepresentation.SOLID_EXTERNAL_ENVELOPE_WITH_HUB_COMPOSITE_NO_BOOLEAN_CUT)
         hub = next(f for f in result.geometry_payload["features"] if f["name"] == "hub")
         self.assertEqual(hub["params"]["status"], "MODELED_STRAIGHT_CYLINDER_SIMPLIFICATION")
+
+
+class TestLengthThroughHubIsTheTotal(unittest.TestCase):
+    """ASME B16.5 measures Y from the flange FACE through to the hub end - the flange
+    thickness is inside it, not additional to it.
+
+    The mesh builder stacks its hub on top of a body of full thickness, so for a long
+    time it was handed Y unchanged and built every hub-bearing flange one whole plate
+    too tall: a 2in #150 weld neck came out at 79.51mm against a published 61.98mm, 28%
+    over. Nothing caught it because the validator was comparing the hub cylinder's own
+    extent against Y, so the check was wrong in exactly the direction the mesh was.
+
+    A viewer measured that mesh and printed the result as an overall dimension on an
+    exportable drawing. These tests are the reason it cannot happen again."""
+
+    def _built(self, nps, cls="150", subtype="weld_neck"):
+        spec = _flange_spec("ASME_B16.5", nps, pressure_class=cls, subtype=subtype,
+                             extra_dims=["hub_base_diameter_mm", "length_through_hub_mm"])
+        result = generate_geometry(spec)
+        self.assertTrue(result.is_generated(), result.generation_trace)
+        return result
+
+    def test_overall_height_equals_published_y_not_y_plus_thickness(self):
+        result = self._built("2")
+        hub = next(f for f in result.geometry_payload["features"] if f["name"] == "hub")
+        y = hub["params"]["length_through_hub_mm"]
+        bbox = result.topology_summary["bounding_box"]
+        overall = bbox["max"][2] - bbox["min"][2]
+        self.assertAlmostEqual(overall, y, places=6,
+                                msg="overall height must BE the published length through hub")
+
+    def test_hub_projection_is_y_minus_thickness_and_is_published(self):
+        result = self._built("2")
+        hub = next(f for f in result.geometry_payload["features"] if f["name"] == "hub")
+        meas = result.geometry_payload["measurements"]
+        thickness = next(v for k, v in meas.items() if k.startswith("flange_thickness"))
+        self.assertAlmostEqual(hub["params"]["hub_projection_mm"],
+                                hub["params"]["length_through_hub_mm"] - thickness, places=6)
+        # Both numbers are published so a consumer can never confuse them again.
+        self.assertGreater(hub["params"]["length_through_hub_mm"], hub["params"]["hub_projection_mm"])
+
+    def test_long_weld_neck_2in_150_is_exactly_229mm(self):
+        # The concrete case: B16.5's LWN rule fixes Y at 229mm for NPS<=4. It built at
+        # 246.53 (229 + the 17.53mm plate) until this was fixed.
+        result = self._built("2", subtype="long_weld_neck")
+        bbox = result.topology_summary["bounding_box"]
+        self.assertAlmostEqual(bbox["max"][2] - bbox["min"][2], 229.0, places=6)
+
+    def test_slip_on_hub_is_short_but_real(self):
+        # A slip-on's hub barely projects - 2in #150 is Y 25.4 over a 19.05 plate, so
+        # 6.35mm of hub. Small enough that "close enough" reasoning would have hidden
+        # the double-count here entirely, which is why the weld-neck case matters.
+        result = self._built("2", subtype="slip_on")
+        hub = next(f for f in result.geometry_payload["features"] if f["name"] == "hub")
+        self.assertEqual(hub["params"]["status"], "MODELED_STRAIGHT_CYLINDER_SIMPLIFICATION")
+        self.assertAlmostEqual(hub["params"]["length_through_hub_mm"], 25.4, places=2)
+        self.assertAlmostEqual(hub["params"]["hub_projection_mm"], 6.35, places=2)
+        bbox = result.topology_summary["bounding_box"]
+        self.assertAlmostEqual(bbox["max"][2] - bbox["min"][2], 25.4, places=2)
+
+
+class TestOpportunisticDimensions(unittest.TestCase):
+    """`dimensions` means REQUIRE; `opportunistic_dimensions` means "if you have it".
+
+    Keeping them separate is the point. A renderer wants the hub on the flanges that
+    publish one without the flanges that do not failing to resolve at all - but a
+    caller that explicitly REQUIRES a dimension we lack must still be told so, rather
+    than handed an object quietly missing it."""
+
+    def test_opportunistic_hub_resolves_where_the_data_exists(self):
+        r = prepare_geometry_specification(EngineeringRequest(
+            product_family="flange", subtype="slip_on", standard="ASME_B16.5",
+            size_system="nps", primary_size="2", pressure_class="150",
+            opportunistic_dimensions=["hub_base_diameter_mm", "length_through_hub_mm"]))
+        self.assertTrue(r.geometry_specification.is_ready())
+        self.assertIn("length_through_hub_mm", r.dimension_resolution.resolved_dimensions)
+
+    def test_opportunistic_hub_absent_does_not_fail_the_object(self):
+        # Class 150 lap joint is a deliberate open cell - sources disagreed, so no fact
+        # was ingested. The flange must still resolve and draw, just without a hub.
+        r = prepare_geometry_specification(EngineeringRequest(
+            product_family="flange", subtype="lap_joint", standard="ASME_B16.5",
+            size_system="nps", primary_size="2", pressure_class="150",
+            opportunistic_dimensions=["hub_base_diameter_mm", "length_through_hub_mm"]))
+        self.assertTrue(r.geometry_specification.is_ready(),
+                        "an unavailable OPPORTUNISTIC dimension must never fail the object")
+        self.assertNotIn("length_through_hub_mm",
+                          r.dimension_resolution.resolved_dimensions or {})
+
+    def test_required_channel_still_fails_loudly_for_the_same_dimension(self):
+        # The contrast that justifies having two channels at all: same flange, same
+        # missing dimension, but REQUIRED this time - and it must not silently pass.
+        r = prepare_geometry_specification(EngineeringRequest(
+            product_family="flange", subtype="lap_joint", standard="ASME_B16.5",
+            size_system="nps", primary_size="2", pressure_class="150",
+            dimensions=["length_through_hub_mm"]))
+        self.assertFalse(r.geometry_specification.is_ready())
+
+    def test_opportunistic_cannot_smuggle_in_a_non_optional_dimension(self):
+        # Only dimensions the profile already calls optional are honoured, so this
+        # channel can never widen what a profile means or invent a new dimension.
+        r = prepare_geometry_specification(EngineeringRequest(
+            product_family="flange", subtype="slip_on", standard="ASME_B16.5",
+            size_system="nps", primary_size="2", pressure_class="150",
+            opportunistic_dimensions=["not_a_real_dimension_mm"]))
+        self.assertTrue(r.geometry_specification.is_ready())
+        self.assertNotIn("not_a_real_dimension_mm",
+                          r.dimension_resolution.resolved_dimensions or {})
+
+
+class TestSubtypeScopedMissDoesNotBecomeAmbiguous(unittest.TestCase):
+    """A subtype-scoped miss on a subtype-VARYING dimension is a miss, not an ambiguity.
+
+    The resolver relaxes the subtype filter when a scoped lookup finds nothing, to
+    recognise facts that carry no subtype tag. But if relaxing surfaces several
+    competing facts, that is evidence the dimension DOES vary by subtype - so the
+    relaxation must not apply. It used to promote that ambiguity into the result, which
+    turned a harmless miss into a fatal one and stopped a whole flange resolving."""
+
+    def test_lap_joint_hub_miss_reports_unavailable_not_ambiguous(self):
+        r = prepare_geometry_specification(EngineeringRequest(
+            product_family="flange", subtype="lap_joint", standard="ASME_B16.5",
+            size_system="nps", primary_size="2", pressure_class="150",
+            opportunistic_dimensions=["length_through_hub_mm"]))
+        self.assertEqual(r.identity_resolution.status, ResolutionStatus.RESOLVED)
+        joined = " ".join(r.identity_resolution.trace)
+        self.assertNotIn("AMBIGUOUS", joined)
+
+    def test_a_genuinely_shared_untagged_fact_still_resolves_via_relaxation(self):
+        # The relaxation's real purpose must be untouched: ASME B16.9 publishes
+        # centre-to-end facts with no fitting_type at all, and they must still resolve
+        # through a subtype-scoped request.
+        spec = prepare_geometry_specification(EngineeringRequest(
+            product_family="buttweld_fitting", subtype="elbow_90_lr",
+            standard="ASME_B16.9", size_system="nps", primary_size="6"))
+        self.assertTrue(spec.geometry_specification.is_ready(),
+                        spec.identity_resolution.trace)
 
 
 if __name__ == "__main__":

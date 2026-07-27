@@ -57,9 +57,9 @@ _REGISTRY, _COUNTS = build_canonical_registry()
 # confirmed directly via kgpe.contract.registry_builder.registry_
 # statistics() and kgpe.contract.data_layer_audit.dataset_inventory()'s
 # own KAFCO_Nipoflange row (authoritative_count=0, quarantined_count=0).
-EXPECTED_BUILT_TOTAL = 6568  # 2026-07-27: +132 facts - hub_base_diameter_mm re-tagged per subtype (weld_neck + long_weld_neck) so subtype-scoped hub lookups can see it
-EXPECTED_STORED_TOTAL = 6108  # 2026-07-27: +132 facts - hub_base_diameter_mm re-tagged per subtype (weld_neck + long_weld_neck) so subtype-scoped hub lookups can see it
-EXPECTED_AUTHORITATIVE = 5857  # 2026-07-27: +132 facts - hub_base_diameter_mm re-tagged per subtype (weld_neck + long_weld_neck) so subtype-scoped hub lookups can see it
+EXPECTED_BUILT_TOTAL = 7438  # 2026-07-27 pass 2: ASME B16.5 Table 8 length-through-hub ingested for slip_on / threaded / socket_weld / lap_joint, and hub_base_diameter_mm re-tagged for all four (X is shared across flange types). Cross-verified across independent sources; cells where sources disagreed were left OUT
+EXPECTED_STORED_TOTAL = 6978  # 2026-07-27 pass 2: ASME B16.5 Table 8 length-through-hub ingested for slip_on / threaded / socket_weld / lap_joint, and hub_base_diameter_mm re-tagged for all four (X is shared across flange types). Cross-verified across independent sources; cells where sources disagreed were left OUT
+EXPECTED_AUTHORITATIVE = 6727  # 2026-07-27 pass 2: ASME B16.5 Table 8 length-through-hub ingested for slip_on / threaded / socket_weld / lap_joint, and hub_base_diameter_mm re-tagged for all four (X is shared across flange types)
 EXPECTED_MANUFACTURER_SPECIFIC = 235
 EXPECTED_QUARANTINED_FACTS = 16
 EXPECTED_QUARANTINED_GROUPS = 8
@@ -89,7 +89,11 @@ class TestRegistryBaselineVerification(unittest.TestCase):
     def test_per_adapter_counts_match_prompt8(self):
         expected = {
             # Prompt 42: ASME_B16.5_flanges shifted 1326 -> 1854 (+528, hub/long_weld_neck facts).
-            "ASME_B16.5_flanges": 1986, "ASME_B36_pipes": 409, "ASME_B16.9_buttweld": 864,
+            # 2026-07-27 pass 2: 1986 -> 2856 (+870). Table 8 length-through-hub ingested for
+            # slip_on / threaded / socket_weld / lap_joint, plus hub_base_diameter_mm re-tagged
+            # for those four (X is shared across flange types, confirmed at every source).
+            "ASME_B16.5_flanges": 2856,
+            "ASME_B36_pipes": 409, "ASME_B16.9_buttweld": 864,
             "ASME_B16.11_socketweld": 750, "MSS_SP97_olets": 223,
             # Post-Prompt-9: KAFCO_Nipoflange, the 12th dataset (2026-07-20).
             "KAFCO_Nipoflange": 120,

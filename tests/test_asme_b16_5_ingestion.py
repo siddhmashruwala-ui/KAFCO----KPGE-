@@ -96,15 +96,30 @@ class TestSuccessfulIngestion(unittest.TestCase):
         # flange_type=long_weld_neck (_LONG_WELD_NECK_SHARED_THICKNESS_SPEC
         # - a duplicate fact, not a duplicate source field, matching
         # ASME B16.5's own "LWN is weld_neck with a different Y" rule).
-        optional_fields = ("Thickness_SlipOn_mm", "Thickness_LapJoint_mm",
-                            "Thickness_Threaded_mm", "Thickness_SocketWeld_mm", "Thickness_Blind_mm")
+        # 2026-07-27: the per-row expectation is now derived from the adapter's own spec
+        # tables rather than hardcoded. The hardcoded "+5" was a standing tax - it had to
+        # be hand-edited every time a hub or thickness column was added, and a stale
+        # number here looks exactly like a real ingestion bug.
+        #
+        # What this still checks independently, and what actually matters: SIX base facts
+        # per source row, and EXACTLY ONE fact per declared spec whose source field is
+        # present in that row - no silent drops, no accidental duplicates, and nothing
+        # emitted for a column the row does not carry. The last clause is the one earning
+        # its keep now that the new length-through-hub columns are deliberately absent at
+        # the class/size combinations where cross-verification found no agreement.
+        conditional_specs = (adapter._OPTIONAL_TYPE_THICKNESS_SPECS
+                              + adapter._HUB_FIELD_SPECS
+                              + adapter._LONG_WELD_NECK_SHARED_THICKNESS_SPEC)
         data, _ = adapter._load_source()
         expected = 0
         for rows in data["classes"].values():
             for row in rows:
-                expected += 6 + 5 + sum(1 for f in optional_fields if f in row)
+                expected += 6 + sum(1 for spec in conditional_specs if spec[0] in row)
         _, facts = adapter.ingest_asme_b16_5_flanges()
         self.assertEqual(len(facts), expected)
+        # And the count really did grow with the new columns - a guard against the
+        # derivation above quietly agreeing with an empty spec table.
+        self.assertGreater(len(facts), 2000)
 
 
 class TestDeterministicIngestion(unittest.TestCase):
