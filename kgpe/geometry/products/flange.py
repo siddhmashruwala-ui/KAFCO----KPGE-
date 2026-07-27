@@ -118,6 +118,24 @@ _NO_BORE_SUBTYPES = frozenset({"blind"})
 # JIS_B2220/EN_1092-1 weld_neck.
 _HUB_ELIGIBLE_SUBTYPES = frozenset({"weld_neck", "long_weld_neck"})
 
+# The ONLY flange subtype that physically has no hub. A blind flange is a solid
+# disc closing a line - there is nothing for a hub to sit on.
+#
+# Everything else - slip_on, threaded, socket_weld, lap_joint - DOES have a hub:
+# ASME B16.5 Table 8 tabulates both X (hub diameter at base) and Y (length through
+# hub) for them. This engine simply holds no facts for those columns yet (the
+# canonical dataset carries a single HubBaseDiameter_mm sourced from the WELD NECK
+# table, plus length-through-hub for weld_neck and long_weld_neck only).
+#
+# That distinction is the whole point of splitting this constant out. Reporting
+# NOT_APPLICABLE_SUBTYPE for a slip-on made a claim about physics - "this flange
+# has no hub" - to describe what is actually a gap in our data. It reads as
+# settled when it is merely unmeasured, and a gap dressed as a fact never gets
+# filled because nobody knows it is there. UNAVAILABLE_NO_AUTHORITATIVE_DIMENSIONS
+# says the true thing: the hub is real, we do not have its dimensions, so we do
+# not draw it.
+_HUBLESS_SUBTYPES = frozenset({"blind"})
+
 _REQUIRED_NUMERIC_BASE = ("outside_diameter_mm", "bolt_circle_diameter_mm", "bolt_hole_diameter_mm")
 
 
@@ -219,8 +237,12 @@ def build(geometry_spec, generation_parameters, bore_value=None):
             hub_status = "MODELED_STRAIGHT_CYLINDER_SIMPLIFICATION"
         else:
             hub_status = "UNAVAILABLE_NO_AUTHORITATIVE_DIMENSIONS"
-    else:
+    elif subtype in _HUBLESS_SUBTYPES:
         hub_status = "NOT_APPLICABLE_SUBTYPE"
+    else:
+        # slip_on / threaded / socket_weld / lap_joint - see _HUBLESS_SUBTYPES above.
+        # A real hub we cannot yet dimension, not an absent one.
+        hub_status = "UNAVAILABLE_NO_AUTHORITATIVE_DIMENSIONS"
 
     if bore_mm is not None:
         if hub_dia_mm is not None:

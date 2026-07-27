@@ -1114,15 +1114,31 @@ class TestLongWeldNeckAndHubGeometry(unittest.TestCase):
 
     def test_other_five_prompt41_subtypes_never_attempt_hub(self):
         # _HUB_ELIGIBLE_SUBTYPES restricts hub resolution to weld_neck/
-        # long_weld_neck only - slip_on/threaded/socket_weld/lap_joint/
-        # blind must always report NOT_APPLICABLE_SUBTYPE, even though
-        # slip_on/threaded/socket_weld/lap_joint DO have a through-bore.
+        # long_weld_neck only, so none of these five ever produces hub
+        # geometry. That much is unchanged and is what this test guards.
+        #
+        # What the REPORTED STATUS means was corrected: this test used to
+        # require NOT_APPLICABLE_SUBTYPE for all five, which said "this
+        # flange has no hub" about four flanges that plainly do have one -
+        # ASME B16.5 Table 8 tabulates X and Y for slip-on, threaded,
+        # socket-welding and lap-joint alike. The real reason we draw no
+        # hub there is that our canonical dataset carries no facts for
+        # those columns. Dressing a data gap as a physical fact is how a
+        # gap goes unfilled: nobody goes looking for a dimension the
+        # engine says does not exist. Only the blind flange - a solid
+        # disc closing a line - is genuinely hubless.
         for subtype in ("slip_on", "threaded", "socket_weld", "lap_joint", "blind"):
             spec = _flange_spec("ASME_B16.5", "2", pressure_class="150", subtype=subtype)
             result = generate_geometry(spec)
             self.assertTrue(result.is_generated(), (subtype, result.generation_trace))
             hub = next(f for f in result.geometry_payload["features"] if f["name"] == "hub")
-            self.assertEqual(hub["params"]["status"], "NOT_APPLICABLE_SUBTYPE")
+            expected = ("NOT_APPLICABLE_SUBTYPE" if subtype == "blind"
+                        else "UNAVAILABLE_NO_AUTHORITATIVE_DIMENSIONS")
+            self.assertEqual(hub["params"]["status"], expected, subtype)
+            # In every one of the five cases, no hub is actually meshed.
+            self.assertEqual(hub["type"], "hub_unavailable_metadata", subtype)
+            topo = result.topology_representation
+            self.assertNotIn("HUB_COMPOSITE", getattr(topo, "value", topo), subtype)
 
     def test_solid_hub_composite_topology_when_no_bore_resolved(self):
         # Prompt 42's fourth mesh-building branch: hub present, bore
