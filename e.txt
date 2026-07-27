@@ -1,8 +1,0 @@
-E       AssertionError: 2856 != 1986
-E       AssertionError: 'c42f4dbe023d9720261de53c54e50193390f5fd5a7ff6129580d8a1ccfd3bf68' != '2906e77c12321e4da4816d60e7582f194a09d480d1d1b927712160f60440cda0'
-E       AssertionError: 'c42f4dbe023d9720261de53c54e50193390f5fd5a7ff6129580d8a1ccfd3bf68' != '2906e77c12321e4da4816d60e7582f194a09d480d1d1b927712160f60440cda0'
-E       AssertionError: 'c42f4dbe023d9720261de53c54e50193390f5fd5a7ff6129580d8a1ccfd3bf68' != '2906e77c12321e4da4816d60e7582f194a09d480d1d1b927712160f60440cda0'
-E       AssertionError: 'c42f4dbe023d9720261de53c54e50193390f5fd5a7ff6129580d8a1ccfd3bf68' != '2906e77c12321e4da4816d60e7582f194a09d480d1d1b927712160f60440cda0'
-E       AssertionError: 7438 != 6568
-E       AssertionError: {'ASM[13 chars]es': 2856, 'ASME_B36_pipes': 409, 'ASME_B16.9_[217 chars] 270} != {'ASM[13 chars]es': 1986, 'ASME_B36_pipes': 409, 'ASME_B16.9_[217 chars] 270}
-E       AssertionError: 6978 != 6108
