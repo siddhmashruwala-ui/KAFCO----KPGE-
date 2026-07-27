@@ -33,7 +33,7 @@ from kgpe.geometry.products import flange
 _READER, _ = build_canonical_reader()
 _FINGERPRINT = registry_fingerprint(_READER.registry)
 _RESOLVER = EngineeringResolver(_READER, _FINGERPRINT)
-_DATA_LAYER_FINGERPRINT = "f291f02e63b591de449502dcbb2980b7729e2cdbdd928765f6a847e13083d748"  # post-Prompt-9: shifted again by the KAFCO_Nipoflange 12th-dataset addition
+_DATA_LAYER_FINGERPRINT = "2906e77c12321e4da4816d60e7582f194a09d480d1d1b927712160f60440cda0"  # post-Prompt-9: shifted again by the KAFCO_Nipoflange 12th-dataset addition
 
 
 def _prep(**kwargs):

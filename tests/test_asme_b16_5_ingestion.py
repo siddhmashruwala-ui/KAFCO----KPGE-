@@ -76,11 +76,20 @@ class TestSuccessfulIngestion(unittest.TestCase):
         # thickness fields that happen to be present on that row (never
         # assumed present - counted directly from the source JSON).
         #
-        # Prompt 42: every row ALSO now contributes 4 unconditional hub-
+        # 2026-07-27: the hub-related count per row is 5, not 4.
+        # HubBaseDiameter_mm is now emitted TWICE - once tagged weld_neck and
+        # once long_weld_neck - because Applicability.matches() is a strict
+        # exact-match filter, so the previous single flange_type=None fact
+        # could never be seen by a subtype-scoped hub lookup and the hub was
+        # silently dropped from every weld-neck and long-weld-neck flange.
+        # Same source column, re-tagged, never re-derived - the identical
+        # pattern this adapter already uses for the LWN thickness fact.
+        #
+        # Prompt 42: every row ALSO now contributes 5 unconditional hub-
         # related facts (all 132 rows carry all three hub fields per
         # _ingest_hub_dimensions.py's merge, so these are folded into the
         # base count rather than the optional list): HubBaseDiameter_mm
-        # (flange_type=None), LengthThroughHub_WeldNeck_mm
+        # (x2 - weld_neck + long_weld_neck), LengthThroughHub_WeldNeck_mm
         # (flange_type=weld_neck), LengthThroughHub_LongWeldNeck_mm
         # (flange_type=long_weld_neck), plus one more emission of the
         # SAME Thickness_WeldNeck_mm source field re-tagged
@@ -93,7 +102,7 @@ class TestSuccessfulIngestion(unittest.TestCase):
         expected = 0
         for rows in data["classes"].values():
             for row in rows:
-                expected += 6 + 4 + sum(1 for f in optional_fields if f in row)
+                expected += 6 + 5 + sum(1 for f in optional_fields if f in row)
         _, facts = adapter.ingest_asme_b16_5_flanges()
         self.assertEqual(len(facts), expected)
 

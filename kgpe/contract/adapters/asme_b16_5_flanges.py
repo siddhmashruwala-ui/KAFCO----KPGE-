@@ -170,14 +170,42 @@ _OPTIONAL_TYPE_THICKNESS_SPECS = (
 # json_field is present (see _ingest_hub_dimensions.py - all 132 rows
 # have it after that merge, but this loop makes no assumption of that).
 _HUB_FIELD_SPECS = (
+    # ── 2026-07-27 fix: hub base diameter is emitted PER SUBTYPE ────────────────────────
+    # It was previously emitted once with flange_type=None, on the reasoning that the value
+    # is identical for weld_neck and long_weld_neck (true, per ASME B16.5's own LWN rule)
+    # and that this matched the OD/bolt-circle sharing pattern (not true, and that is the
+    # bug). OD and bolt-circle are looked up WITHOUT a flange_type filter, so an untyped
+    # fact is exactly right for them. Hub base diameter is looked up as part of a
+    # SUBTYPE-SCOPED hub resolution, and Applicability.matches() is a strict exact-match
+    # filter by design ("not a rules engine" - applicability.py) - so flange_type='weld_neck'
+    # never matched a fact carrying flange_type=None, and hub_base_diameter_mm silently
+    # failed to resolve for every request.
+    #
+    # Downstream effect, confirmed live before this fix: products/flange.py builds a hub
+    # only when BOTH hub_base_diameter_mm AND length_through_hub_mm resolve. For a 2" #150
+    # long weld neck the length resolved (229mm) and the diameter did not, so the hub was
+    # dropped and a bare flat plate was generated - a Long Weld Neck rendering as a
+    # slip-on, which is what a customer-facing viewer then showed.
+    #
+    # The value is re-tagged, never re-derived: both entries read the same
+    # HubBaseDiameter_mm source column. This mirrors the precedent already set in this
+    # adapter for the LWN flange thickness, which re-tags Thickness_WeldNeck_mm rather
+    # than duplicating a number.
     (
-        "HubBaseDiameter_mm", VOC.DIM_HUB_BASE_DIAMETER, None,
+        "HubBaseDiameter_mm", VOC.DIM_HUB_BASE_DIAMETER, "weld_neck",
         "Verified in KGPE Prompt 42: Texas Flange 'X' column, cross-checked against "
         "pipingpipeline.com's explicitly-labeled 'X: diameter of hub at base' column, 0 mismatches "
         "across 5 spot-checked (class, NPS) pairs. Also matches the KAFCO CRM dashboard's own "
         "pre-existing legacy HUB_DIM table to <0.01in on every spot-checked value (independent "
-        "3rd confirmation - no conflict for this dimension). flange_type=None because ASME B16.5's "
-        "own LWN rule states hub base diameter is identical between weld_neck and long_weld_neck.",
+        "3rd confirmation - no conflict for this dimension).",
+    ),
+    (
+        "HubBaseDiameter_mm", VOC.DIM_HUB_BASE_DIAMETER, "long_weld_neck",
+        "Same source value and verification as the weld_neck entry above, re-tagged for "
+        "long_weld_neck: ASME B16.5's own Long Weld Neck rule states the hub base diameter is "
+        "identical to the weld-neck figure for the same NPS/class. Emitted as its own typed fact "
+        "rather than shared via an untyped one, because subtype-scoped resolution uses strict "
+        "exact matching and would never see a flange_type=None fact.",
     ),
     (
         "LengthThroughHub_WeldNeck_mm", VOC.DIM_LENGTH_THROUGH_HUB, "weld_neck",

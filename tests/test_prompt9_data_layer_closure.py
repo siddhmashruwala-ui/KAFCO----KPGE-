@@ -57,9 +57,9 @@ _REGISTRY, _COUNTS = build_canonical_registry()
 # confirmed directly via kgpe.contract.registry_builder.registry_
 # statistics() and kgpe.contract.data_layer_audit.dataset_inventory()'s
 # own KAFCO_Nipoflange row (authoritative_count=0, quarantined_count=0).
-EXPECTED_BUILT_TOTAL = 6436
-EXPECTED_STORED_TOTAL = 5976
-EXPECTED_AUTHORITATIVE = 5725
+EXPECTED_BUILT_TOTAL = 6568  # 2026-07-27: +132 facts - hub_base_diameter_mm re-tagged per subtype (weld_neck + long_weld_neck) so subtype-scoped hub lookups can see it
+EXPECTED_STORED_TOTAL = 6108  # 2026-07-27: +132 facts - hub_base_diameter_mm re-tagged per subtype (weld_neck + long_weld_neck) so subtype-scoped hub lookups can see it
+EXPECTED_AUTHORITATIVE = 5857  # 2026-07-27: +132 facts - hub_base_diameter_mm re-tagged per subtype (weld_neck + long_weld_neck) so subtype-scoped hub lookups can see it
 EXPECTED_MANUFACTURER_SPECIFIC = 235
 EXPECTED_QUARANTINED_FACTS = 16
 EXPECTED_QUARANTINED_GROUPS = 8
@@ -89,7 +89,7 @@ class TestRegistryBaselineVerification(unittest.TestCase):
     def test_per_adapter_counts_match_prompt8(self):
         expected = {
             # Prompt 42: ASME_B16.5_flanges shifted 1326 -> 1854 (+528, hub/long_weld_neck facts).
-            "ASME_B16.5_flanges": 1854, "ASME_B36_pipes": 409, "ASME_B16.9_buttweld": 864,
+            "ASME_B16.5_flanges": 1986, "ASME_B36_pipes": 409, "ASME_B16.9_buttweld": 864,
             "ASME_B16.11_socketweld": 750, "MSS_SP97_olets": 223,
             # Post-Prompt-9: KAFCO_Nipoflange, the 12th dataset (2026-07-20).
             "KAFCO_Nipoflange": 120,

@@ -606,7 +606,7 @@ class TestPrompt12BackwardCompatibility(unittest.TestCase):
 
 class TestFullRegressionAndDemo(unittest.TestCase):
     def test_data_layer_fingerprint_unchanged(self):
-        self.assertEqual(_FINGERPRINT, "f291f02e63b591de449502dcbb2980b7729e2cdbdd928765f6a847e13083d748")  # post-Prompt-9: shifted again by the KAFCO_Nipoflange 12th-dataset addition
+        self.assertEqual(_FINGERPRINT, "2906e77c12321e4da4816d60e7582f194a09d480d1d1b927712160f60440cda0")  # post-Prompt-9: shifted again by the KAFCO_Nipoflange 12th-dataset addition
 
     def test_legacy_generator_untouched(self):
         from kgpe.generator import _DISPATCH
